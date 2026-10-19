@@ -54,7 +54,9 @@ const { chromium } = require('playwright');
     await page.waitForFunction(() => state.sr67?.status === 'ready');
     assert.equal(await page.evaluate(() => nativeMessages.face.length), 1, 'Photo must reach native ML Kit');
     assert.equal(await page.evaluate(() => state.sr67.source), 'mlkit');
-    assert.equal(await page.locator('.sr65-adjust').count(), 0, 'Legacy manual-only framing panel must be removed in native mode');
+    assert.equal(await page.locator('.sr65-adjust').count(), 1, 'Photo framing must be available alongside native analysis');
+    assert.match(await page.locator('.sr65-adjust').textContent(), /이 사진으로 다시 분석/);
+    assert.doesNotMatch(await page.locator('.sr65-adjust').textContent(), /얼굴을 자동으로 인식하지 않아/);
     assert.equal(await page.locator('.sr67-photo-status').getAttribute('data-analysis-state'), 'ready');
     assert.equal(await page.locator('.sr67-photo-status').evaluate(status =>
       !!(status.compareDocumentPosition(document.querySelector('.camera-window')) & Node.DOCUMENT_POSITION_FOLLOWING)), true,
