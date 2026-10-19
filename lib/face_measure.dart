@@ -71,7 +71,8 @@ class FaceMeasure {
     if (face == null || face.points.length < 12 ||
         leftEye == null || leftEye.points.length < 5 ||
         rightEye == null || rightEye.points.length < 5 ||
-        nose == null || nose.points.length < 3 ||
+        // ML Kit returns two contour points for the nose bridge.
+        nose == null || nose.points.length < 2 ||
         lips == null || lips.points.length < 5 ||
         browLeft == null || browRight == null ||
         noseBottom == null || noseBottom.points.length < 3) {

@@ -1133,6 +1133,32 @@ const css=`<style>
       if (typeof go === 'function') { /* base app route remains unchanged */ }
     } catch(e) { state.sr67={status:'error',error:String(e.message||e)};render(); }
   };
+  // Native analysis replaces the legacy manual-framing instructions.
+  const nativePhotoView = photoView;
+  photoView = function () {
+    if (!window.FaceScan) return nativePhotoView();
+    const messages = {
+      ko: {help:'사진을 선택하면 ML Kit이 기기 안에서 얼굴을 자동 분석해. 정면 얼굴이 선명한 사진을 사용해 줘.',fail:'얼굴을 분석하지 못했어. 아래 오류 안내를 확인하고 사진을 다시 선택해 줘.'},
+      en: {help:'Select a clear, front-facing photo. ML Kit analyzes your face on this device.',fail:'Face analysis failed. Check the error below and choose another photo.'},
+      ja: {help:'正面の鮮明な写真を選ぶと、端末内の ML Kit が顔を自動分析するよ。',fail:'顔を分析できなかったよ。下のエラーを確認して写真を選び直してね。'}
+    }[state.lang] || null;
+    if (messages) cfg().fail = messages.fail;
+    const template = document.createElement('template');
+    template.innerHTML = nativePhotoView();
+    template.content.querySelector('.sr65-adjust')?.remove();
+    const description = template.content.querySelector('.subheading');
+    if (description && messages) description.textContent = messages.help;
+    const status = template.content.querySelector('.sr67-photo-status');
+    const camera = template.content.querySelector('.camera-zone');
+    if (status && camera) {
+      status.setAttribute('role', 'status');
+      status.dataset.analysisState = state.sr67?.status || 'idle';
+      camera.before(status);
+    }
+    return template.innerHTML;
+  };
+  // ROUTES stores function objects: register the final guidance/status wrapper.
+  ROUTES.photo = photoView;
   // Consume WebView file-input clicks and route them to the native image picker.
   // Browser-only usage retains its existing file inputs and camera fallback.
   document.addEventListener('click', function (event) {

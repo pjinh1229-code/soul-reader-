@@ -20,9 +20,15 @@ const { chromium } = require('playwright');
       window.nativeMessages = { screen: [], picker: [], face: [] };
       window.PhotoScreen = {postMessage: message => nativeMessages.screen.push(JSON.parse(message))};
       window.PhotoPicker = {postMessage: message => nativeMessages.picker.push(JSON.parse(message))};
+      window.faceReplyMode = 'success';
       window.FaceScan = {postMessage: message => {
         const request = JSON.parse(message);
         nativeMessages.face.push(request);
+        if (window.faceReplyMode === 'hold') return;
+        if (window.faceReplyMode === 'error') {
+          queueMicrotask(() => window.soulMlKitReceive(request.requestId, {ok: false, error: 'NO_FACE: 정면 얼굴을 찾지 못했어.'}));
+          return;
+        }
         queueMicrotask(() => window.soulMlKitReceive(request.requestId, {ok: true,
           face: {brow: 1, eyes: 1, nose: 1, smile: 1, jaw: 1, aura: 1},
           metrics: {measurementSource: 'test_native_response'}}));
@@ -48,6 +54,31 @@ const { chromium } = require('playwright');
     await page.waitForFunction(() => state.sr67?.status === 'ready');
     assert.equal(await page.evaluate(() => nativeMessages.face.length), 1, 'Photo must reach native ML Kit');
     assert.equal(await page.evaluate(() => state.sr67.source), 'mlkit');
+    assert.equal(await page.locator('.sr65-adjust').count(), 0, 'Legacy manual-only framing panel must be removed in native mode');
+    assert.equal(await page.locator('.sr67-photo-status').getAttribute('data-analysis-state'), 'ready');
+    assert.equal(await page.locator('.sr67-photo-status').evaluate(status =>
+      !!(status.compareDocumentPosition(document.querySelector('.camera-window')) & Node.DOCUMENT_POSITION_FOLLOWING)), true,
+      'Analysis status must appear above the photo');
+    await page.evaluate(async () => {
+      window.faceReplyMode = 'hold';
+      const canvas = document.createElement('canvas'); canvas.width = 8; canvas.height = 8;
+      await window.soulNativePhoto(canvas.toDataURL('image/png'));
+    });
+    await page.waitForFunction(() => state.sr67?.status === 'loading');
+    assert.equal(await page.locator('.sr67-photo-status').getAttribute('data-analysis-state'), 'loading');
+    await page.evaluate(() => {
+      window.soulMlKitReceive(nativeMessages.face.at(-1).requestId,
+        {ok: false, error: 'NO_FACE: 정면 얼굴을 찾지 못했어.'});
+    });
+    await page.waitForFunction(() => state.sr67?.status === 'error');
+    assert.match(await page.locator('.sr67-photo-status').textContent(), /NO_FACE/);
+    assert.equal(await page.locator('.sr67-photo-status').getAttribute('data-analysis-state'), 'error');
+    assert.equal(await page.locator('button.btn-primary[disabled]').count(), 1, 'Do not advance as a successful detection on error');
+    await page.evaluate(() => {window.faceReplyMode = 'success';});
+    await page.locator('[data-sr67="retry"]').click();
+    await page.waitForFunction(() => state.sr67?.status === 'ready');
+    assert.equal(await page.locator('button.btn-primary[data-route="traits"]').count(), 1);
+    console.log('PASS: visible loading/error/success states and retry; no fake success on detection failure');
     await page.locator('[data-action="toggle-consent"]').click();
     await page.waitForFunction(() => nativeMessages.screen.at(-1)?.consent === false);
     assert.equal(await page.locator('#photoInput').count(), 0);
