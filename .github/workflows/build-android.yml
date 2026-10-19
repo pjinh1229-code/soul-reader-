@@ -31,6 +31,15 @@ jobs:
         run: bash scripts/prepare_android.sh
       - name: Verify original audio files
         run: python3 scripts/verify_assets.py
+      - name: Test camera/gallery and ML Kit bridge in Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts --prefix "$RUNNER_TEMP/photo-bridge-test" playwright@1.57.0
+          export NODE_PATH="$RUNNER_TEMP/photo-bridge-test/node_modules"
+          export CHROMIUM_PATH="$(command -v google-chrome || command -v chromium)"
+          test -n "$CHROMIUM_PATH"
+          node tests/photo_bridge.cjs
       - name: Dart static analysis
         run: flutter analyze --no-fatal-infos
       - name: Build signed debug APK for Galaxy installation
@@ -42,14 +51,14 @@ jobs:
           python3 scripts/verify_assets.py build/app/outputs/flutter-apk/app-debug.apk
           apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
           "$apksigner" verify --verbose build/app/outputs/flutter-apk/app-debug.apk
-          cp build/app/outputs/flutter-apk/app-debug.apk SOUL_READER_7.3.apk
-          sha256sum SOUL_READER_7.3.apk > SOUL_READER_7.3.apk.sha256
+          cp build/app/outputs/flutter-apk/app-debug.apk SOUL_READER_7.3.1.apk
+          sha256sum SOUL_READER_7.3.1.apk > SOUL_READER_7.3.1.apk.sha256
       - name: Publish installable APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SOUL_READER_7.3_Galaxy_APK
+          name: SOUL_READER_7.3.1_Galaxy_APK
           path: |
-            SOUL_READER_7.3.apk
-            SOUL_READER_7.3.apk.sha256
+            SOUL_READER_7.3.1.apk
+            SOUL_READER_7.3.1.apk.sha256
           if-no-files-found: error
           retention-days: 30

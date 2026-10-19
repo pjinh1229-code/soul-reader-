@@ -53,6 +53,7 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
           setState(() { _photoScreen = visible; _consented = consent; });
         }
       })
+      ..addJavaScriptChannel('PhotoPicker', onMessageReceived: _onPhotoPicker)
       ..addJavaScriptChannel('FaceScan', onMessageReceived: _onFaceRequest)
       ..loadFlutterAsset('assets/web/index.html');
     if (Platform.isAndroid && _web.platform is AndroidWebViewController) {
@@ -84,8 +85,25 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
     return bytes.buffer.asUint8List();
   }
 
+  void _onPhotoPicker(JavaScriptMessage message) {
+    if (!mounted || !_photoScreen || !_consented || _busy) return;
+    try {
+      final data = jsonDecode(message.message) as Map<String, dynamic>;
+      switch (data['source']) {
+        case 'camera':
+          _pick(ImageSource.camera);
+          break;
+        case 'gallery':
+          _pick(ImageSource.gallery);
+          break;
+      }
+    } catch (_) {
+      setState(() => _message = '사진 선택 요청을 읽지 못했어. 다시 눌러 줘.');
+    }
+  }
+
   Future<void> _pick(ImageSource source) async {
-    if (_busy) return;
+    if (!mounted || !_photoScreen || !_consented || _busy) return;
     setState(() { _busy = true; _message = null; });
     try {
       final photo = await _picker.pickImage(source: source,

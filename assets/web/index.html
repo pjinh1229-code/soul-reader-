@@ -1065,43 +1065,8 @@ const css=`<style>
 .sr67-photo-preview{max-width:150px;margin:10px auto;border-radius:15px;overflow:hidden;border:1px solid #a48ba6}.sr67-photo-preview img{width:100%;display:block;object-fit:cover}.sr67-photo-status strong{color:#fbdcc9}.sr67-photo-status button{border:1px solid #dcb4d577;padding:9px 15px;border-radius:12px;color:#f6d4e2;background:transparent}
 .sr67-small,.sr67-note,.sr67-measured{font-size:12px;color:#c5b5ce;line-height:1.8}.sr67-cards{display:grid;gap:12px;margin:18px 0}.sr67-choice,.sr67-reading{border:1px solid #ba91b34d;background:#ffffff08;border-radius:14px;padding:14px}.sr67-choice>b{color:#f4d8e8}.sr67-options{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}.sr67-options button{color:#e6d8e7;background:#ffffff10;border-radius:9px;border:1px solid #e1c2db47;padding:10px 11px;font-size:13px}.sr67-options button.on{border-color:#efb8cc;background:#7c4c74a8;color:#fff}.sr67-report h2,.sr67-top h1{font-size:24px;color:#ffe5cf;margin:8px 0}.sr67-report>p{line-height:1.8}.sr67-reading{margin:10px 0}.sr67-reading p{font-size:13px;line-height:1.85;margin:8px 0}.sr67-upper{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.sr67-upper span{color:#ebbfd8;font-weight:600}.sr67-upper strong{font-size:14px;color:#ffeadf}.sr67-note{margin-top:14px}.sr67-theme{margin-bottom:16px}
 </style>`;document.head.insertAdjacentHTML('beforeend',css);
-})();
-</script>
-<div id="sr70-tools"><details id="sr70-panel"><summary>⚙ 테스트 · 상태</summary><div id="sr70-content">
-<p id="sr70-runtime">시작 중...</p>
-<button type="button" id="sr70-voice">▶ 류 음성 확인</button>
-<button type="button" id="sr70-bgm">♫ 배경음악 확인</button>
-<button type="button" id="sr70-check">◎ 사진 인식 환경 확인</button>
-<div id="sr70-status" role="status" aria-live="polite">원하는 기능을 눌러 확인해 주세요.</div>
-<p>사진 분석에는 인터넷 연결이 필요하며, 얼굴 비율은 실제 성격·운명을 판정하지 않아요. 결제는 데모입니다.</p>
-</div></details></div>
-<script>
-(()=>{'use strict';
-const $=s=>document.querySelector(s), line=(x)=>{$('#sr70-status').textContent=x;};
-let voice=null;
-const text={
-ko:{intro:'설치 없이 휴대폰 Chrome에서 사용할 수 있어요. 홈 화면에 추가해 앱처럼 열 수도 있어요.',audio:'류 음성이 재생 중이야.',ok:'재생 파일 확인 완료',no:'소리를 재생할 수 없어. 음량과 브라우저 설정을 확인해줘.',bgm:'배경음악 재생 중',net:'인터넷 연결',netbad:'인터넷 연결 없음',face:'얼굴 분석 모델이 실제 작동하는지는 사진으로 확인해야 해.',secure:'보안 접속(HTTPS)',local:'브라우저 미리보기/로컬 파일에서는 기능 제한 가능',guide:'사진 촬영 팁: 정면 · 밝은 조명 · 안경/머리카락으로 눈 가리지 않기 · 이마에서 턱까지 프레임 안에 넣기. 얼굴이 중앙에 오도록 해줘.'},
-en:{intro:'Open in Chrome on your phone. You can also add it to your home screen.',audio:'RYU voice playing.',ok:'Audio file loaded',no:'Playback failed. Check device sound and browser settings.',bgm:'Music playing',net:'Online',netbad:'Offline',face:'Check actual face detection using a real photo.',secure:'Secure HTTPS',local:'Local file and preview modes may limit features',guide:'Photo tip: face forward, bright even light, eyes visible, entire forehead and chin in the frame.'},
-ja:{intro:'スマホのChromeで開けます。ホーム画面への追加もできます。',audio:'リュウの音声を再生中。',ok:'音声ファイルを確認',no:'再生できません。音量とブラウザ設定を確認してください。',bgm:'BGM再生中',net:'オンライン',netbad:'オフライン',face:'顔認識の動作は実際の写真で確認してください。',secure:'HTTPS接続',local:'ローカルファイルでは機能が制限される場合があります',guide:'撮影のコツ：正面・明るい場所・目を隠さず、額からあごまで入れてください。'}};
-function lang(){return document.documentElement.lang==='en'?'en':document.documentElement.lang==='ja'?'ja':'ko'}function t(){return text[lang()]}
-function info(){const u=location.protocol;$('#sr70-runtime').textContent=(u==='https:'?t().secure:u==='file:'?t().local:'HTTP / local test')+' · '+(navigator.onLine?t().net:t().netbad);}
-info();window.addEventListener('online',info);window.addEventListener('offline',info);
-$('#sr70-voice').onclick=async()=>{try{if(voice){voice.pause();voice=null;}voice=new Audio('audio/'+lang()+'/intro.mp3');voice.volume=.85;await voice.play();line('✓ '+t().audio);voice.addEventListener('error',()=>line(t().no+' (audio/'+lang()+'/intro.mp3)'))}catch(e){line('⚠ '+t().no+' ['+(e.name||'error')+']')}};
-$('#sr70-bgm').onclick=async()=>{const a=$('#fateMusic');try{if(a.paused){a.volume=.28;await a.play();line('✓ '+t().bgm)}else{a.pause();line('Ⅱ BGM OFF')}const b=$('#musicToggle');if(b)b.textContent=a.paused?'♪ BGM OFF':'♪ BGM ON';}catch(e){line('⚠ '+t().no+' ['+(e.name||'error')+']')}};
-$('#sr70-check').onclick=()=>{line(window.FaceScan ? '✓ Android/iOS 앱 내부 ML Kit 연결 준비됨. 실제 인식 성공 여부는 사진을 선택해 확인해 줘.' : '⚠ 얼굴 인식은 설치형 Android/iOS 앱에서만 지원해.');};
-// Show accessible phone capture instructions whenever the app shows its photo step.
-const app=$('#app');let ticking=false;
-function patch(){if(ticking)return;ticking=true;queueMicrotask(()=>{ticking=false;const camera=app.querySelector('.camera-zone');if(camera&&!app.querySelector('#sr70-photo-help')){const d=document.createElement('div');d.id='sr70-photo-help';d.innerHTML='<b>📷 '+(lang()==='ko'?'휴대폰 촬영 기준':lang()==='ja'?'スマホ撮影ガイド':'Phone photo guide')+'</b><div>'+t().guide+'</div>';camera.before(d)}})}
-new MutationObserver(patch).observe(app,{childList:true});patch();
-if('serviceWorker' in navigator && location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
-})();
-</script>
-
-<script id="soul-native-mlkit-bridge">
 /* Flutter native ML Kit bridge: overrides the old CDN-based detector only in the app. */
 (function () {
-  if (typeof measure !== 'function') return;
-  const originalWebMeasure = measure;
   let nextNativeRequest = 0;
   const pending = new Map();
   window.soulMlKitReceive = function (requestId, response) {
@@ -1168,6 +1133,22 @@ if('serviceWorker' in navigator && location.protocol==='https:')navigator.servic
       if (typeof go === 'function') { /* base app route remains unchanged */ }
     } catch(e) { state.sr67={status:'error',error:String(e.message||e)};render(); }
   };
+  // Consume WebView file-input clicks and route them to the native image picker.
+  // Browser-only usage retains its existing file inputs and camera fallback.
+  document.addEventListener('click', function (event) {
+    if (!window.PhotoPicker) return;
+    const input = event.target.closest('input[type="file"], label.file-picker');
+    const id = input && (input.id || input.querySelector('input[type="file"]')?.id);
+    const alternateCamera = event.target.closest('[data-action="open-camera"]');
+    const source = (id === 'photoInput' || alternateCamera) ? 'camera'
+      : (id === 'galleryInput' || id === 'fileBrowserInput') ? 'gallery' : null;
+    if (!source) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (!state.consent) { notify(label('consentRequired')); return; }
+    window.soulNativePhotoControls();
+    window.PhotoPicker.postMessage(JSON.stringify({source}));
+  }, true);
   // Tell Flutter when photo controls are relevant. Also works after screen changes.
   window.soulNativePhotoControls = function() {
     const show=!!document.querySelector('.camera-window');
@@ -1177,5 +1158,38 @@ if('serviceWorker' in navigator && location.protocol==='https:')navigator.servic
     .observe(document.body,{childList:true,subtree:true});
   window.soulNativePhotoControls();
 })();
+
+})();
 </script>
+<div id="sr70-tools"><details id="sr70-panel"><summary>⚙ 테스트 · 상태</summary><div id="sr70-content">
+<p id="sr70-runtime">시작 중...</p>
+<button type="button" id="sr70-voice">▶ 류 음성 확인</button>
+<button type="button" id="sr70-bgm">♫ 배경음악 확인</button>
+<button type="button" id="sr70-check">◎ 사진 인식 환경 확인</button>
+<div id="sr70-status" role="status" aria-live="polite">원하는 기능을 눌러 확인해 주세요.</div>
+<p>사진 분석에는 인터넷 연결이 필요하며, 얼굴 비율은 실제 성격·운명을 판정하지 않아요. 결제는 데모입니다.</p>
+</div></details></div>
+<script>
+(()=>{'use strict';
+const $=s=>document.querySelector(s), line=(x)=>{$('#sr70-status').textContent=x;};
+let voice=null;
+const text={
+ko:{intro:'설치 없이 휴대폰 Chrome에서 사용할 수 있어요. 홈 화면에 추가해 앱처럼 열 수도 있어요.',audio:'류 음성이 재생 중이야.',ok:'재생 파일 확인 완료',no:'소리를 재생할 수 없어. 음량과 브라우저 설정을 확인해줘.',bgm:'배경음악 재생 중',net:'인터넷 연결',netbad:'인터넷 연결 없음',face:'얼굴 분석 모델이 실제 작동하는지는 사진으로 확인해야 해.',secure:'보안 접속(HTTPS)',local:'브라우저 미리보기/로컬 파일에서는 기능 제한 가능',guide:'사진 촬영 팁: 정면 · 밝은 조명 · 안경/머리카락으로 눈 가리지 않기 · 이마에서 턱까지 프레임 안에 넣기. 얼굴이 중앙에 오도록 해줘.'},
+en:{intro:'Open in Chrome on your phone. You can also add it to your home screen.',audio:'RYU voice playing.',ok:'Audio file loaded',no:'Playback failed. Check device sound and browser settings.',bgm:'Music playing',net:'Online',netbad:'Offline',face:'Check actual face detection using a real photo.',secure:'Secure HTTPS',local:'Local file and preview modes may limit features',guide:'Photo tip: face forward, bright even light, eyes visible, entire forehead and chin in the frame.'},
+ja:{intro:'スマホのChromeで開けます。ホーム画面への追加もできます。',audio:'リュウの音声を再生中。',ok:'音声ファイルを確認',no:'再生できません。音量とブラウザ設定を確認してください。',bgm:'BGM再生中',net:'オンライン',netbad:'オフライン',face:'顔認識の動作は実際の写真で確認してください。',secure:'HTTPS接続',local:'ローカルファイルでは機能が制限される場合があります',guide:'撮影のコツ：正面・明るい場所・目を隠さず、額からあごまで入れてください。'}};
+function lang(){return document.documentElement.lang==='en'?'en':document.documentElement.lang==='ja'?'ja':'ko'}function t(){return text[lang()]}
+function info(){const u=location.protocol;$('#sr70-runtime').textContent=(u==='https:'?t().secure:u==='file:'?t().local:'HTTP / local test')+' · '+(navigator.onLine?t().net:t().netbad);}
+info();window.addEventListener('online',info);window.addEventListener('offline',info);
+$('#sr70-voice').onclick=async()=>{try{if(voice){voice.pause();voice=null;}voice=new Audio('audio/'+lang()+'/intro.mp3');voice.volume=.85;await voice.play();line('✓ '+t().audio);voice.addEventListener('error',()=>line(t().no+' (audio/'+lang()+'/intro.mp3)'))}catch(e){line('⚠ '+t().no+' ['+(e.name||'error')+']')}};
+$('#sr70-bgm').onclick=async()=>{const a=$('#fateMusic');try{if(a.paused){a.volume=.28;await a.play();line('✓ '+t().bgm)}else{a.pause();line('Ⅱ BGM OFF')}const b=$('#musicToggle');if(b)b.textContent=a.paused?'♪ BGM OFF':'♪ BGM ON';}catch(e){line('⚠ '+t().no+' ['+(e.name||'error')+']')}};
+$('#sr70-check').onclick=()=>{line(window.FaceScan ? '✓ Android/iOS 앱 내부 ML Kit 연결 준비됨. 실제 인식 성공 여부는 사진을 선택해 확인해 줘.' : '⚠ 얼굴 인식은 설치형 Android/iOS 앱에서만 지원해.');};
+// Show accessible phone capture instructions whenever the app shows its photo step.
+const app=$('#app');let ticking=false;
+function patch(){if(ticking)return;ticking=true;queueMicrotask(()=>{ticking=false;const camera=app.querySelector('.camera-zone');if(camera&&!app.querySelector('#sr70-photo-help')){const d=document.createElement('div');d.id='sr70-photo-help';d.innerHTML='<b>📷 '+(lang()==='ko'?'휴대폰 촬영 기준':lang()==='ja'?'スマホ撮影ガイド':'Phone photo guide')+'</b><div>'+t().guide+'</div>';camera.before(d)}})}
+new MutationObserver(patch).observe(app,{childList:true});patch();
+if('serviceWorker' in navigator && location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
+})();
+</script>
+
+
 </body></html>
