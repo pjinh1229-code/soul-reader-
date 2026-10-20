@@ -1477,7 +1477,7 @@ const ENDING80={
  ]}
 };
 function ready80(s){return !!s&&s.pack==='bundle'&&s.completed?.length===4&&TOPICS75.every(k=>s.completed.includes(k)&&(s.choices?.[k]===0||s.choices?.[k]===1))}
-function family80(s){const count=TOPICS75.reduce((n,k)=>n+s.choices[k],0);if(count===0)return 0;if(count===4)return 5;if(count===1)return 1;if(count===3)return 4;return s.choices.love===s.choices.bond?2:3}
+function family80(s){const c=s.choices;if(c.love===1){if(c.bond===0)return 2;return c.chance===0?4:5}if(c.work===1)return c.bond===0?3:5;return c.bond===0?0:1}
 function selected80(s){return Number.isInteger(s?.finale80)&&s.finale80>=0&&s.finale80<3?s.finale80:null}
 const finaleBefore80=finale54;
 finale54=function(){

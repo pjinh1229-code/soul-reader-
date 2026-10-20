@@ -24,7 +24,7 @@ const {chromium}=require('playwright');
   assert.equal(await page.locator('[data-ending-choice80]').count(),0,'A single pass must not access the final choice');
   for(const lang of ['ko','en','ja']){
    const ids=new Set(),events=new Set(),afters=new Set(),quotes=new Set(),families=new Set(),titles=new Set();
-   const masks=lang==='ko'?Array.from({length:16},(_,i)=>i):[0,1,6,3,7,15];
+   const masks=lang==='ko'?Array.from({length:16},(_,i)=>i):[0,1,8,2,9,15];
    for(const mask of masks)for(let finish=0;finish<3;finish++){
     await start(lang,mask);
     assert.equal(await page.locator('.e80-ending').count(),0,'No ending revealed before final choice');
@@ -36,7 +36,12 @@ const {chromium}=require('playwright');
     const body=await page.locator('.e80-ending').textContent();
     assert.ok(body.length>(lang==='en'?500:200),'The ending needs a substantive scene, dialogue and aftermath');
     ids.add(await page.locator('[data-ending80]').getAttribute('data-ending80'));
-    families.add(await page.locator('[data-family80]').getAttribute('data-family80'));
+    const family=Number(await page.locator('[data-family80]').getAttribute('data-family80'));
+    families.add(String(family));
+    if(family===2||family===4)assert.equal((mask>>3)&1,1,'Greenhouse scenes require the earned greenhouse key');
+    if(family===3)assert.equal((mask>>1)&1,1,'The completed bridge requires the shared design');
+    if(family===0)assert.equal((mask>>3)&1,0,'The reply scene requires a sent letter');
+    if(family===1)assert.equal(mask&1,1,'The station follows the separate-map route');
     titles.add(await page.locator('.e80-ending h2').textContent());
     events.add(await page.locator('.e80-event').textContent());
     afters.add(await page.locator('.e80-after').textContent());
