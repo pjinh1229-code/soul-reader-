@@ -113,10 +113,12 @@ const { chromium } = require('playwright');
       }
     }
     assert.equal(new Set(titles).size,9,'The summary must change with the input features in each language');
+    let freeTakeaway;
     for (const theme of ['love','opportunity','career','relationship']) {
       await page.evaluate(theme=>{state.lang='ko';state.reading.theme=theme;state.screen='result';render();},theme);
       const line=await page.locator('.r74-takeaway').textContent();
-      assert.match(line,/다섯 부위를 한데 놓고/,'The free reading must be independent of premium themes');
+      if(freeTakeaway===undefined)freeTakeaway=line;
+      else assert.equal(line,freeTakeaway,'The free reading must be independent of premium themes');
     }
     await page.evaluate(()=>{state.screen='result';render();});
     await page.locator('[data-action="save"]').click();
