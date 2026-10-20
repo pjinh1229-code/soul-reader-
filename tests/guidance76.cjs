@@ -15,10 +15,13 @@ const {chromium}=require('playwright');
    for(const topic of ['love','chance','work','bond']){
     await page.locator(`[data-ep="${topic}"]`).click();
     const evidence=await page.locator('.r74-story').first().textContent();
-    const count=await page.locator('[data-context76]').count(),bodies=new Set();
+    const count=await page.locator('[data-context76]').count(),bodies=new Set(),conclusions=new Set(),actions=new Set();
     assert.ok(count>=4);
     for(let i=0;i<count;i++){
      await page.locator(`[data-context76="${i}"]`).click();
+     assert.equal(await page.locator('.g77-result').getAttribute('data-result77'),`${topic}-${i}`);
+     conclusions.add(await page.locator('.g77-result h2').textContent());
+     actions.add(await page.locator('.g77-result p').last().textContent());
      assert.equal(await page.locator('.r74-story').count(),4);
      assert.equal(await page.locator('.r74-story').first().textContent(),evidence);
      const body=await page.locator('.r74-premium-sections').textContent();
@@ -26,6 +29,8 @@ const {chromium}=require('playwright');
      bodies.add(body);
      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
     }
+    assert.equal(conclusions.size,count,'Each situation must have a distinct visible conclusion');
+    assert.equal(actions.size,count,'Each situation must have a distinct next action');
     assert.equal(bodies.size,count,'Each situation needs distinct practical guidance');
     await page.locator('[data-sr65-episode-choice="1"]').click();
     const result=await page.locator('.b75-result').textContent();
@@ -36,12 +41,14 @@ const {chromium}=require('playwright');
     await page.locator('[data-ep-complete]').click();
     await page.locator(`[data-ep="${topic}"]`).click();
     assert.equal(await page.locator('[data-context76="1"]').getAttribute('aria-pressed'),'true');
+    assert.match(await page.locator('.g77-result').getAttribute('data-result77'),/-1$/);
     await page.locator('[data-ep-complete]').click();
    }
   }
   await page.reload();await page.evaluate(()=>goto('premium'));await page.locator('[data-resume75]').click();await page.locator('[data-ep="bond"]').click();
   assert.equal(await page.locator('[data-context76="1"]').getAttribute('aria-pressed'),'true');
+    assert.match(await page.locator('.g77-result').getAttribute('data-result77'),/-1$/);
   assert.deepEqual(errors,[]);
-  console.log('PASS: 51 localized situation readings, measured evidence, no scene prose in guidance, persistent contexts and unchanged committed branches');
+  console.log('PASS: 51 localized situation results with distinct visible conclusions and actions, measured evidence, persistence and unchanged committed branches');
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1});
