@@ -91,6 +91,9 @@ const { chromium } = require('playwright');
           await page.screenshot({path:'/tmp/soul74-free-mobile.png'});
         }
       }
+      await page.evaluate(()=>{state.screen='premium';render();});
+      await page.locator('[data-pickpack="bundle"]').click();
+      await page.locator('[data-demo-unlock]').click();
       for (const theme of ['love','chance','work','bond']) {
         await page.evaluate(({lang,theme})=>{state.lang=lang;sampleEpisode=theme;samplePack='bundle';state.screen='episode52';render();},{lang,theme});
         assert.equal(await page.locator('.r74-theme-reading').count(),1);
@@ -113,7 +116,7 @@ const { chromium } = require('playwright');
     for (const theme of ['love','opportunity','career','relationship']) {
       await page.evaluate(theme=>{state.lang='ko';state.reading.theme=theme;state.screen='result';render();},theme);
       const line=await page.locator('.r74-takeaway').textContent();
-      assert.match(line,({love:/기억할/,opportunity:/손잡이/,career:/마침표/,relationship:/인연/})[theme]);
+      assert.match(line,/다섯 부위를 한데 놓고/,'The free reading must be independent of premium themes');
     }
     await page.evaluate(()=>{state.screen='result';render();});
     await page.locator('[data-action="save"]').click();
