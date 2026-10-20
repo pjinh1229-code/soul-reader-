@@ -84,7 +84,7 @@ const { chromium } = require('playwright');
     await page.locator('[data-action="toggle-consent"]').click();
     await page.waitForFunction(() => nativeMessages.screen.at(-1)?.consent === false);
     assert.equal(await page.locator('#photoInput').count(), 0);
-    await page.evaluate(() => {state.screen = 'themes'; render();});
+    await page.evaluate(() => {state.screen = 'welcome'; render();});
     await page.waitForFunction(() => nativeMessages.screen.at(-1)?.show === false);
     assert.deepEqual(errors, [], 'Page must not throw');
     console.log('PASS: consent, camera/gallery/file/alternate routing, native photo-to-ML Kit response, and navigation');
