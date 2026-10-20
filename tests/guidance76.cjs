@@ -22,7 +22,7 @@ const {chromium}=require('playwright');
      assert.equal(await page.locator('.g77-result').getAttribute('data-result77'),`${topic}-${i}`);
      conclusions.add(await page.locator('.g77-result h2').textContent());
      actions.add(await page.locator('.g77-result p').last().textContent());
-     assert.equal(await page.locator('.r74-story').count(),4);
+     assert.equal(await page.locator('.r74-story').count(),2);
      assert.equal(await page.locator('.r74-story').first().textContent(),evidence);
      const body=await page.locator('.r74-premium-sections').textContent();
      assert.doesNotMatch(body,/첫 장면|바라봄에서|등불|달빛|류는|류가|편지/);

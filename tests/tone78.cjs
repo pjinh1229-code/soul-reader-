@@ -15,9 +15,10 @@ const {chromium}=require('playwright');
     await page.evaluate(()=>{state.reading=buildReading();goto('result')});
     assert.equal(await page.evaluate(()=>state.reading.choice),choice);
     assert.equal(await page.locator('.r74-report').getAttribute('data-tone78'),choice===0?'direct':'gentle');
-    outputs.push({observed:await page.locator('.r74-observed').allTextContents(),labels:await page.locator('.r74-part h3').allTextContents(),cores:await page.locator('.r74-core').allTextContents(),snapshot:await page.evaluate(()=>JSON.stringify(state.reading.sr67))});
+    outputs.push({focus:await page.locator('.c81-focus h2').textContent(),observed:await page.locator('.r74-observed').allTextContents(),labels:await page.locator('.r74-part h3').allTextContents(),cores:await page.locator('.r74-core').allTextContents(),snapshot:await page.evaluate(()=>JSON.stringify(state.reading.sr67))});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
    }
+   assert.notEqual(outputs[0].focus,outputs[1].focus,'The first visible reading also reflects the chosen tone');
    assert.deepEqual(outputs[0].observed,outputs[1].observed,'Tone must never change measurement statements');
    assert.deepEqual(outputs[0].labels,outputs[1].labels);
    assert.equal(outputs[0].snapshot,outputs[1].snapshot);

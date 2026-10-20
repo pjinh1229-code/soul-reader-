@@ -46,6 +46,7 @@ jobs:
           node tests/tone78.cjs
           node tests/takeaway79.cjs
           node tests/ending80.cjs
+          node tests/concise81.cjs
       - name: Dart static analysis
         run: flutter analyze --no-fatal-infos
       - name: Test ML Kit result validation
@@ -59,14 +60,14 @@ jobs:
           python3 scripts/verify_assets.py build/app/outputs/flutter-apk/app-debug.apk
           apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
           "$apksigner" verify --verbose build/app/outputs/flutter-apk/app-debug.apk
-          cp build/app/outputs/flutter-apk/app-debug.apk SOUL_READER_8.0.apk
-          sha256sum SOUL_READER_8.0.apk > SOUL_READER_8.0.apk.sha256
+          cp build/app/outputs/flutter-apk/app-debug.apk SOUL_READER_8.1.apk
+          sha256sum SOUL_READER_8.1.apk > SOUL_READER_8.1.apk.sha256
       - name: Publish installable APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SOUL_READER_8.0_Galaxy_APK
+          name: SOUL_READER_8.1_Galaxy_APK
           path: |
-            SOUL_READER_8.0.apk
-            SOUL_READER_8.0.apk.sha256
+            SOUL_READER_8.1.apk
+            SOUL_READER_8.1.apk.sha256
           if-no-files-found: error
           retention-days: 30
