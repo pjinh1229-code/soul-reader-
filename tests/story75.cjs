@@ -12,6 +12,9 @@ const {chromium}=require('playwright');
   await page.locator('[data-route="themes"]').first().click();
   assert.equal(await page.evaluate(()=>state.screen),'photo','Free entry must go straight to photos');
   assert.equal(await page.locator('[data-theme]').count(),0);
+  await page.locator('.circle-back').click();
+  assert.equal(await page.evaluate(()=>state.screen),'welcome','Photo back button must return home after removing the theme screen');
+  await page.locator('[data-route="themes"]').first().click();
   const topics=['love','chance','work','bond'];
   async function fresh(lang='ko'){
    await page.evaluate(lang=>{state.lang=lang;state.theme='love';state.face={brow:1,eyes:1,nose:1,smile:1,jaw:1,aura:1};state.sr67={status:'ready',source:'mlkit',face:{...state.face},metrics:{}};state.reading=buildReading();goto('premium');},lang);
