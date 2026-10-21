@@ -1,0 +1,75 @@
+name: Build uploaded SOUL READER 8.5 APK
+
+on:
+  push:
+    branches: [build/soul-reader-8.5-script-fix]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Flutter stable (Dart 3.12 or newer required)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Print Flutter version
+        run: flutter --version
+      - name: Prepare Android without changing Flutter sources
+        run: bash scripts/prepare_android.sh
+      - name: Verify original audio files
+        run: python3 scripts/verify_assets.py
+      - name: Test camera/gallery and ML Kit bridge for uploaded source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts --prefix "$RUNNER_TEMP/photo-bridge-test" playwright@1.57.0
+          export NODE_PATH="$RUNNER_TEMP/photo-bridge-test/node_modules"
+          export CHROMIUM_PATH="$(command -v google-chrome || command -v chromium)"
+          test -n "$CHROMIUM_PATH"
+          node tests/photo_bridge.cjs
+      - name: Dart static analysis
+        run: flutter analyze --no-fatal-infos
+      - name: Test ML Kit result validation
+        run: flutter test test/face_measure_test.dart
+      - name: Build signed debug APK for Galaxy installation
+        run: flutter build apk --debug
+      - name: Verify APK audio and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_assets.py build/app/outputs/flutter-apk/app-debug.apk
+          python3 - <<'PY'
+          import hashlib, zipfile
+          from pathlib import Path
+          source = Path('assets/web/index.html').read_bytes()
+          with zipfile.ZipFile('build/app/outputs/flutter-apk/app-debug.apk') as apk:
+              packaged = apk.read('assets/flutter_assets/assets/web/index.html')
+          assert packaged == source, 'APK web source differs from supplied source'
+          print('Verified supplied web source in APK:', hashlib.sha256(packaged).hexdigest())
+          PY
+          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          "$apksigner" verify --verbose build/app/outputs/flutter-apk/app-debug.apk
+          cp build/app/outputs/flutter-apk/app-debug.apk SOUL_READER_8.5_SCRIPT_FIX.apk
+          sha256sum SOUL_READER_8.5_SCRIPT_FIX.apk > SOUL_READER_8.5_SCRIPT_FIX.apk.sha256
+      - name: Publish installable APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SOUL_READER_8.5_SCRIPT_FIX_Galaxy_APK
+          path: |
+            SOUL_READER_8.5_SCRIPT_FIX.apk
+            SOUL_READER_8.5_SCRIPT_FIX.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
