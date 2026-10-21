@@ -146,6 +146,26 @@ const {chromium}=require('playwright');
    await page.locator('.circle-back').click();assert.equal(await page.evaluate(()=>state.screen),'episode52');
    console.log(`PASS: ${lang}: all four localized topic modes, distinct editorial previews, owned-topic access and return navigation`);
   }
+
+  // Regression: the active result renderer must display the integrated 8.5 script.
+  const reports=[];
+  for(const tier of [0,1,2]){
+   await fresh('ko',tier);
+   assert.equal(await page.locator('.sr85-report').count(),1);
+   assert.equal(await page.locator('.sr85-part').count(),6);
+   assert.equal(await page.locator('.sr85-overall').count(),1);
+   assert.ok(await page.locator('.sr85-report').isVisible());
+   reports.push(await page.locator('.sr85-report').innerText());
+   await fit();
+  }
+  assert.equal(new Set(reports).size,3,'Different classifications must select different script variants');
+  await page.evaluate(()=>{state.sr67={status:'error'};render()});
+  assert.equal(await page.locator('.sr85-report').innerText(),reports[2],'Saved result must retain its own analyzed snapshot');
+  await page.evaluate(()=>{state.sr67={status:'manual'};state.reading=buildReading();goto('result')});
+  assert.equal(await page.locator('.sr85-part').count(),0,'Manual inputs must not pretend to be ML Kit analysis');
+  for(const lang of ['en','ja']){await fresh(lang);assert.equal(await page.locator('.sr85-report').count(),0);}
+  console.log('PASS: 8.5 active result displays six script sections and summary; varied classifications, saved snapshot, manual gate and locale isolation');
+
   assert.deepEqual(errors,[]);
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
