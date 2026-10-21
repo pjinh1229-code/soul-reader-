@@ -1,4 +1,4 @@
-name: Build SOUL READER Android test APK
+name: Build SOUL READER 8.5 Android APK
 
 on:
   push:
