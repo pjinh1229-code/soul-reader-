@@ -23,7 +23,7 @@ const {chromium}=require('playwright');
    },{lang,tier,screen});
   }
   async function openReference(){
-   await page.locator('[data-route="theory83"]').click();
+   assert.equal(await page.locator('[data-route="theory83"],.ref83-link').count(),0,'Catalog entry is removed from the app screens');await page.evaluate(()=>goto('theory83'));
    assert.equal(await page.evaluate(()=>state.screen),'theory83');
    assert.equal(await catalog().getAttribute('data-ref84-total'),'60');
   }
@@ -155,6 +155,11 @@ const {chromium}=require('playwright');
    assert.equal(await page.locator('.sr85-part').count(),6);
    assert.equal(await page.locator('.sr85-overall').count(),1);
    assert.ok(await page.locator('.sr85-report').isVisible());
+   assert.equal(await page.locator('[data-route="theory83"],.ref83-link').count(),0);
+   assert.equal(await page.evaluate(()=>{
+    const ryu=document.querySelector('.sr85-report'),photo=document.querySelector('.p82-report');
+    return !!(ryu.compareDocumentPosition(photo)&Node.DOCUMENT_POSITION_FOLLOWING);
+   }),true,'RYU reading must appear before photo and traditional explanations');
    reports.push(await page.locator('.sr85-report').innerText());
    await fit();
   }
