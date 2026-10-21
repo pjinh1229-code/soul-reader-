@@ -50,6 +50,19 @@ jobs:
           node tests/photo82.cjs
           node tests/reference83.cjs
           node tests/reference84.cjs
+      - name: Verify integrated 8.5 reading script
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("assets/web/index.html")
+          html = p.read_text(encoding="utf-8")
+          required = ["function sr85Report()", "${sr85Report()}", "류의 6가지 관상 풀이", "scan.source!=='mlkit'"]
+          missing = [token for token in required if token not in html]
+          if missing:
+              raise SystemExit("ERROR: 8.5 integrated script missing from APK source: " + ", ".join(missing))
+          print("8.5 integrated script verified")
+          PY
       - name: Dart static analysis
         run: flutter analyze --no-fatal-infos
       - name: Test ML Kit result validation
