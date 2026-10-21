@@ -859,7 +859,7 @@ const summaries={온:'네 관상의 중심은 온기야. 사람이 네 곁에 �
 
 function sr85Report(){
  if(state.lang!=='ko')return '';
- const scan=state.sr67;
+ const scan=state.reading?.sr67;
  if(!scan||scan.status!=='ready'||scan.source!=='mlkit'||!scan.face)return '<section class="sr85-report"><h2>✧ 류의 관상 풀이</h2><p>얼굴 분석이 완료되지 않았어. 사진을 다시 선택하고 분석을 진행해 줘.</p></section>';
  const counts={온:0,강:0,심:0};let html='<section class="sr85-report"><h2>✧ 류의 6가지 관상 풀이</h2><p>사진에서 관찰한 외형을 전통 관상 이야기로 풀었어.</p>';
  for(const [key,[title,options]] of Object.entries(parts)){
@@ -1249,7 +1249,7 @@ const makeReport=report74;
 result=function(){
  const r=state.reading;if(!r)return themeScreen();const T=text74();
  const photo=valid74(r)&&r.sr67.analyzedAt&&r.sr67.analyzedAt===state.sr67?.analyzedAt?state.photoData:null;
- return `<main class="scene">${headerBar('archive')}<section class="page r74-free-page"><div class="eyebrow">FREE · SOUL READER</div>${photo?`<img class="r74-result-thumb" src="${photo}" alt="${esc(T.photo)}">`:''}<h1 class="main-heading">${esc(valid74(r)?T.free:T.manual)}</h1><p class="subheading">${esc(valid74(r)?T.photo:T.manual)}</p>${makeReport(r,false)}<div class="button-row"><button class="btn-line" data-action="save">☾ ${esc(T.saved)}</button><button class="btn-line" data-action="share">↗ ${esc(T.share)}</button></div><button class="btn-line" data-route="photo">${esc(T.review)}</button><section class="r74-offer"><div class="eyebrow">NEXT CHAPTER</div><h2>${esc(T.premium)}</h2><p>${esc(T.premiumHelp)}</p><button class="btn-primary" data-route="premium">${esc(T.next)} →</button></section><button class="btn-quiet" data-route="themes">${esc(T.again)}</button></section>${bottom()}</main>`;
+ return `<main class="scene">${headerBar('archive')}<section class="page r74-free-page"><div class="eyebrow">FREE · SOUL READER</div>${photo?`<img class="r74-result-thumb" src="${photo}" alt="${esc(T.photo)}">`:''}<h1 class="main-heading">${esc(valid74(r)?T.free:T.manual)}</h1><p class="subheading">${esc(valid74(r)?T.photo:T.manual)}</p>${makeReport(r,false)}${sr85Report()}<div class="button-row"><button class="btn-line" data-action="save">☾ ${esc(T.saved)}</button><button class="btn-line" data-action="share">↗ ${esc(T.share)}</button></div><button class="btn-line" data-route="photo">${esc(T.review)}</button><section class="r74-offer"><div class="eyebrow">NEXT CHAPTER</div><h2>${esc(T.premium)}</h2><p>${esc(T.premiumHelp)}</p><button class="btn-primary" data-route="premium">${esc(T.next)} →</button></section><button class="btn-quiet" data-route="themes">${esc(T.again)}</button></section>${bottom()}</main>`;
 };
 const oldEp=episode52;episode52=function(){
  const html=oldEp();if(!state.reading)return html;const r=state.reading,t=theme74(r,sampleEpisode),T=text74();
