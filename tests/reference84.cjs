@@ -157,9 +157,9 @@ const {chromium}=require('playwright');
    assert.ok(await page.locator('.sr85-report').isVisible());
    assert.equal(await page.locator('[data-route="theory83"],.ref83-link').count(),0);
    assert.equal(await page.evaluate(()=>{
-    const ryu=document.querySelector('.sr85-report'),photo=document.querySelector('.p82-report');
+    const ryu=document.querySelector('.sr85-report'),photo=document.querySelector('.r74-takeaway');
     return !!(ryu.compareDocumentPosition(photo)&Node.DOCUMENT_POSITION_FOLLOWING);
-   }),true,'RYU reading must appear before photo and traditional explanations');
+   }),true,'RYU reading must appear before the daily takeaway and collapsed details');
    reports.push(await page.locator('.sr85-report').innerText());
    await fit();
   }

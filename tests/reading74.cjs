@@ -81,9 +81,9 @@ const { chromium } = require('playwright');
         assert.equal(await page.locator('.r74-part').count(),5,`${lang}: all five features must be free`);
         assert.equal(await page.locator('.r74-part .r74-meaning').count(),5);
         assert.equal(await page.locator('.r74-dictionary').count(),1,'General definitions belong in the free report once');
-        const summary=await page.locator('.r74-summary h2').textContent();titles.push(`${lang}:${summary}`);
+        const summary=(await page.locator('.r74-part h3').allTextContents()).join(' · ');titles.push(`${lang}:${summary}`);
         assert.equal(await page.locator('.c81-feature-details').getAttribute('open'),null,'Feature explanations start collapsed');
-        assert.ok((await page.locator('.c81-focus h2').textContent()).length>8,'Show one plain-language takeaway first');
+        assert.ok((await page.locator('.r74-takeaway p').textContent()).length>8,'Keep the daily takeaway');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth<=innerWidth+1),true,'Mobile report must fit viewport');
         if (lang==='ko' && n===2) {
           assert.match(await page.locator('[data-feature-key="nose"]').textContent(),/세로 길이가 긴/);
