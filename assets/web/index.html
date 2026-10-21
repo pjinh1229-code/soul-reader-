@@ -1943,4 +1943,41 @@ if('serviceWorker' in navigator && location.protocol==='https:')navigator.servic
 </script>
 
 
+
+<!-- SOUL READER 8.5: ML Kit-selected six-part script, no random assignment -->
+<style>
+.sr85-report{margin:22px 0;padding:20px;border:1px solid #3c516a;border-radius:20px;background:#141e31;color:#e2e8f0}
+.sr85-report h2{color:#7dd3fc;font-size:20px;margin:0 0 12px}.sr85-part{padding:13px 0;border-bottom:1px solid #334155}.sr85-part b{color:#7dd3fc}.sr85-part em{float:right;font-style:normal;color:#e0f2fe}.sr85-part p,.sr85-report p{line-height:1.75;font-size:14px}.sr85-overall{margin-top:18px;padding:14px;border-radius:12px;background:#26364d}
+</style>
+<script>
+(function(){
+const parts={
+ eyes:['눈빛의 느낌',[['차분한','네 눈빛은 호수 같아. 흔들리지 않고 깊이 가라앉아 있지. 끝까지 지켜보다 정확한 순간에 움직이는 사람의 눈이야.','심'],['또렷한','눈빛이 참 선명해. 네 눈은 망설임이 없어. 목표를 정하면 곧장 바라보는 사람의 눈이지. 속마음이 눈에 먼저 나오는 솔직한 상이기도 해.','강'],['장난스러운','눈 속에 장난기가 숨어 있네. 이런 눈을 가진 사람 곁에는 늘 웃음이 따라. 분위기를 풀어내는 재주가 있어서 사람 복이 자연스럽게 붙는 상이야.','온']]],
+ brow:['이마의 인상',[['부드러운','이마 선이 둥글고 온화해. 마음결이 곱다는 뜻이야. 윗사람과 아랫사람 모두에게 미움 사지 않고, 갈등을 부드럽게 넘기는 상이지.','온'],['시원한','이마가 훤히 트였어. 초년운이 밝고 머리 회전이 빠른 상이야. 생각이 막히지 않고, 귀인을 만나기 쉬운 이마지.','강'],['선명한','이마 윤곽이 또렷해. 뜻이 분명하고 추진력이 있다는 거야. 한번 마음먹으면 길을 내서라도 가는 사람이지.','심']]],
+ smile:['입매의 분위기',[['다정한','입매가 참 다정하네. 말 한마디에 온기가 실리는 사람이야. 주변에 마음 기대는 이들이 많아.','온'],['밝은','입꼬리가 살짝 올라가 있어. 복과 인복을 부르는 입매야. 네가 웃으면 주변 공기가 달라지고, 말로 일을 풀어내는 재주도 있어.','온'],['시크한','입매가 단정하고 쉽게 풀어지지 않아. 말을 아끼는 대신 한마디가 무거운 사람이지. 신중하고 비밀을 잘 지키는 상이지.','심']]],
+ aura:['전체적인 분위기',[['포근하고 편안한','네 곁에 있으면 마음이 놓여. 사람을 쉬게 하는 기운이 있거든. 처음 만난 사람도 금방 속을 터놓는 상이야.','온'],['생기 있고 활발한','기운이 살아 있어. 움직이는 곳마다 활기가 번지지. 변화를 두려워하지 않고 새 길을 열어가는 힘이 있어.','강'],['신비롭고 차분한','속을 쉽게 보여주지 않는 사람이야. 처음엔 거리가 느껴지는데, 알수록 깊이가 보여. 한 번 마음을 연 사람에게는 오래 신뢰를 주는 상이지.','심']]],
+ nose:['코의 인상',[['곧게 뻗은 코','코는 재물과 자존심의 자리야. 곧게 뻗은 코는 원칙이 분명하고 정직하다는 뜻이지. 한번 마음먹으면 밀고 나가는 끈기가 있고, 재물도 꾸준히 쌓이는 상이야. 다만 고집은 조심해야 해.','강'],['부드러운 곡선','코선이 부드럽게 흘러. 융통성이 있고 사람과 부딪히지 않는 상이야. 재물도 급하게 오기보다 인연을 타고 자연스럽게 들어와.','온'],['둥근 코끝','코끝이 둥글면 복이 모인다고 해. 마음이 넉넉하고 베풀 줄 아는 사람이지. 돈이 들어오면 나누는 쪽이라, 오히려 사람으로 부유해지는 상이야.','온']]],
+ jaw:['턱·하관의 인상',[['둥근 턱선','턱선이 둥글어. 정이 깊고 품이 넓다는 뜻이야. 말년에 주변 사람들이 곁을 지켜주는 상이지.','온'],['선명한 턱선','하관이 또렷해. 책임감이 강하고 뒷심이 좋은 상이야. 젊을 때보다 나이 들수록 자리가 단단해지지.','강'],['갸름한 턱선','턱선이 갸름해. 감각이 섬세하고 예민한 사람이야. 눈치가 빨라서 분위기를 먼저 읽고, 안목이 높아 취향이 분명한 상이지.','심']]]
+};
+const summaries={온:'네 관상의 중심은 온기야. 사람이 네 곁에 모이고, 네가 있으면 자리가 편해져. 재물도 사람을 통해 들어오는 상이지. 다만 남을 챙기느라 정작 네 몫을 미루는 건 조심해.',강:'네 관상의 중심은 추진력이야. 방향을 정하면 망설이지 않고 길을 여는 사람이지. 다만 힘이 세면 부딪힘도 따르니, 고집은 한 걸음 물러서 다뤄.',심:'네 관상의 중심은 깊이야. 서두르지 않고 속을 오래 품다가 정확한 때에 움직이는 사람이지. 한번 맺은 인연은 오래 가는 상이야. 다만 속을 너무 안 보이면 사람들이 거리를 느끼니, 가끔은 먼저 열어 보여.',mixed:'한 가지로 못 박기 어려운 상이야. 두 얼굴이 서로를 받쳐주거든. 그게 네 매력이고, 쓰임새가 넓다는 뜻이지.',balanced:'온기와 힘과 깊이를 다 가졌어. 상황에 따라 다른 얼굴을 꺼낼 줄 아는 사람이야. 보기 드문 균형이지.'};
+function patch(){
+ const target=document.querySelector('main.journey-result .page');if(!target||document.querySelector('.sr85-report'))return;
+ if(typeof state==='undefined'||state.lang!=='ko')return;
+ const reading=state.reading, scan=reading?.sr67;
+ if(!scan||scan.source!=='mlkit'||!scan.face)return;
+ const counts={온:0,강:0,심:0};let html='<h2>✧ 류의 6가지 관상 풀이</h2><p>ML Kit 얼굴 윤곽 측정으로 선택한 외형 분류를 전통 관상 이야기로 풀었어.</p>';
+ for(const [key,[title,options]] of Object.entries(parts)){
+  const index=Number(scan.face[key]);if(!Number.isInteger(index)||index<0||index>2)continue;
+  const [label,text,energy]=options[index];counts[energy]++;
+  html+=`<div class="sr85-part"><b>${title}</b><em>${label}</em><p>${text}</p></div>`;
+ }
+ const vals=Object.values(counts),max=Math.max(...vals),leaders=Object.keys(counts).filter(k=>counts[k]===max);
+ const overall=vals.every(v=>v===2)?summaries.balanced:leaders.length>1?summaries.mixed:summaries[leaders[0]];
+ html+=`<div class="sr85-overall"><b>💡 종합 평가</b><p>${overall}</p></div><p>관상은 정해진 운명이 아니라 하나의 이야기일 뿐이야. 마음에 드는 부분만 가져가. 또 보자.</p><small>※ 얼굴 특징은 기기 내에서 측정하지만 성격·재물·운명에 관한 문장은 창작된 오락용 해석이야. 형태 분류 기준은 실험적이야.</small>`;
+ const el=document.createElement('section');el.className='sr85-report';el.innerHTML=html;
+ const anchor=target.querySelector('.result-section');if(anchor)anchor.before(el);else target.append(el);
+}
+let scheduled=false;new MutationObserver(()=>{if(scheduled)return;scheduled=true;queueMicrotask(()=>{scheduled=false;patch()})}).observe(document.getElementById('app'),{childList:true});patch();
+})();
+</script>
 </body></html>
