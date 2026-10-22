@@ -33,7 +33,7 @@ const {chromium}=require('playwright');
     assert.equal(await page.locator('.p82-report,.p82-feature').count(),0);
     assert.equal(await page.locator('.r74-theme-reading').count(),1);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
-    await page.locator('[data-sr65-episode-choice="0"]').click();await page.locator('[data-ep-complete]').click();
+    assert.equal(await page.locator('[data-sr65-episode-choice],.g76-fiction').count(),0);await page.locator('[data-back855]').click();
    }
   }
   assert.deepEqual(errors,[]);

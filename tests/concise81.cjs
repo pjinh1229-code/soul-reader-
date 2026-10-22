@@ -34,7 +34,7 @@ const {chromium}=require('playwright');
     assert.ok((await page.locator('.g77-result p').last().textContent()).length<400,'One short next action');
     assert.doesNotMatch(await page.locator('.g77-result').textContent(),/등불|첫 장면|류는|류가|달빛/);
     assert.equal(await page.locator('.c81-paid-details').getAttribute('open'),null);
-    await page.locator('[data-sr65-episode-choice="0"]').click();await page.locator('[data-ep-complete]').click();
+    assert.equal(await page.locator('[data-sr65-episode-choice],.g76-fiction').count(),0);await page.locator('[data-back855]').click();
    }
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
   }

@@ -32,23 +32,19 @@ const {chromium}=require('playwright');
     assert.equal(conclusions.size,count,'Each situation must have a distinct visible conclusion');
     assert.equal(actions.size,count,'Each situation must have a distinct next action');
     assert.equal(bodies.size,count,'Each situation needs distinct practical guidance');
-    await page.locator('[data-sr65-episode-choice="1"]').click();
-    const result=await page.locator('.b75-result').textContent();
-    await page.locator('[data-context76="0"]').click();
-    assert.equal(await page.locator('.b75-result').textContent(),result);
-    assert.equal(await page.locator('[data-sr65-episode-choice]:disabled').count(),2);
+    assert.equal(await page.locator('.b75-result,[data-sr65-episode-choice],.g76-fiction').count(),0);
     await page.locator('[data-context76="1"]').click();
-    await page.locator('[data-ep-complete]').click();
+    await page.locator('[data-back855]').click();
     await page.locator(`[data-ep="${topic}"]`).click();
     assert.equal(await page.locator('[data-context76="1"]').getAttribute('aria-pressed'),'true');
     assert.match(await page.locator('.g77-result').getAttribute('data-result77'),/-1$/);
-    await page.locator('[data-ep-complete]').click();
+    await page.locator('[data-back855]').click();
    }
   }
   await page.reload();await page.evaluate(()=>goto('premium'));await page.locator('[data-resume75]').click();await page.locator('[data-ep="bond"]').click();
   assert.equal(await page.locator('[data-context76="1"]').getAttribute('aria-pressed'),'true');
     assert.match(await page.locator('.g77-result').getAttribute('data-result77'),/-1$/);
   assert.deepEqual(errors,[]);
-  console.log('PASS: 51 localized situation results with distinct visible conclusions and actions, measured evidence, persistence and unchanged committed branches');
+  console.log('PASS: 51 localized situation results with distinct visible conclusions and actions, measured evidence, persistence and removal of branching fiction');
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1});

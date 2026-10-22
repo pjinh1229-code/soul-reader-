@@ -106,7 +106,7 @@ const { chromium } = require('playwright');
         assert.equal(await page.locator('.c81-paid-details').getAttribute('open'),null,'Keep supporting details collapsed');
         assert.ok((await page.locator('.g77-result').textContent()).length<1500,'The main paid reading should be concise');
         assert.doesNotMatch(await page.locator('.g77-result').textContent(),/역할의 비유|등불|류는|첫 장면/,'Keep fictional scene prose out of the main topic guidance');
-        assert.equal(await page.locator('.sr65-episode-branch button').count(),2,'Keep the original consequential story choices');
+        assert.equal(await page.locator('.sr65-episode-branch,.g76-fiction,[data-ep-complete]').count(),0,'Paid readings must not show branching fiction');
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth<=innerWidth+1),true,'Mobile premium screen must fit viewport');
         const fullStory=await page.locator('.r74-premium-sections').textContent();
         await page.evaluate(()=>{for(const k of ['brow','eyes','nose','smile','jaw','aura'])state.reading.sr67.face[k]=0;render();});

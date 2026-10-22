@@ -1985,6 +1985,48 @@ const css=`<style>
     return template.innerHTML;
   };
   // ROUTES stores function objects: register the final guidance/status wrapper.
+// 8.5.5: paid content ends with the reading; no branching fiction or finale.
+const UI855={
+ ko:{head:'주제별 관상 풀이',intro:'사랑·기회·일·인연 중 궁금한 주제를 더 자세히 읽어봐.',single:'한 주제 풀이',bundle:'네 주제 전체 풀이',singleDetail:'선택한 한 주제의 6가지 관상 풀이와 종합평가',bundleDetail:'사랑·기회·일·인연, 네 주제의 6가지 관상 풀이와 종합평가',choose:'읽을 주제를 골라줘',bundleHelp:'네 주제를 원하는 순서로 자유롭게 읽어봐.',resume:'열어 둔 풀이 다시 보기',back:'주제 목록으로',view:'풀이 보기',need:'무료 풀이를 먼저 완성하면 그 사진의 주제별 풀이를 볼 수 있어.',saveError:'이용권 정보를 기기에 저장하지 못했어. 저장 공간을 확인해 줘.'},
+ en:{head:'Topic face readings',intro:'Explore love, opportunity, work, and connections in more detail.',single:'One topic reading',bundle:'All four topic readings',singleDetail:'Six feature readings and an overall reading for one topic',bundleDetail:'Six feature readings and an overall reading for each of all four topics',choose:'Choose a topic to read',bundleHelp:'Read all four topics freely, in any order.',resume:'Reopen your unlocked readings',back:'Back to topics',view:'View reading',need:'Complete a free reading first to explore topics for that photo.',saveError:'Your pass could not be saved on this device. Please check available storage.'},
+ ja:{head:'テーマ別の観相読み',intro:'恋愛・チャンス・仕事・ご縁を、もっと詳しく読んでみよう。',single:'一つのテーマの読み',bundle:'四つのテーマの読み',singleDetail:'選んだ一テーマの6つの観相読みと総合評価',bundleDetail:'恋愛・チャンス・仕事・ご縁、それぞれの6つの観相読みと総合評価',choose:'読みたいテーマを選んでね',bundleHelp:'四つのテーマを、好きな順番で自由に読んでね。',resume:'開いた読みをもう一度見る',back:'テーマ一覧へ',view:'読みを見る',need:'無料の読みを完成すると、その写真のテーマ別の読みを見られるよ。',saveError:'パスの情報を端末に保存できなかったよ。空き容量を確認してね。'}
+};
+const ui855=()=>UI855[state.lang]||UI855.ko;
+for(const lang of ['ko','en','ja']){
+ const u=UI855[lang];
+ Object.assign(PREM[lang],{head:u.head,intro:u.intro,single:u.single,bundle:u.bundle,singleDetail:u.singleDetail,bundleDetail:u.bundleDetail,view:u.view});
+ Object.assign(COPY75[lang],{choose:u.choose,bundleHelp:u.bundleHelp,resume:u.resume,need:u.need,back:u.back,saveError:u.saveError});
+ Object.assign(R74[lang],{premium:u.head,premiumHelp:u.intro});
+ Object.assign(I18N[lang],{single:u.single,bundle:u.bundle});
+}
+premium52=function(){
+ const u=ui855(),p=PREM[state.lang];
+ if(!state.reading){const saved=Object.values(book75).filter(s=>s?.unlocked&&s.reading?.id).sort((a,b)=>b.updatedAt-a.updatedAt)[0];return `<main class="scene">${headerBar('welcome')}<section class="page"><h1 class="main-heading">${esc(u.head)}</h1><p>${esc(u.need)}</p><button class="btn-primary" data-route="themes">${esc(txt75().free)}</button>${saved?`<button class="btn-line" data-resume75="${esc(saved.id)}">${esc(u.resume)}</button>`:''}</section>${bottom()}</main>`;}
+ return `<main class="scene">${headerBar('result')}<section class="page"><h1 class="main-heading">${esc(u.head)}</h1><p class="premium-story-intro">${esc(u.intro)}</p>${session75()?`<button class="btn-line" data-route="chapters52">${esc(u.resume)}</button>`:''}${['single','bundle'].map(pack=>`<section class="pack-tile ${pack==='bundle'?'featured':''}"><div class="pack-head"><h2>${esc(u[pack])}</h2><strong class="pack-price">${price(pack==='single')}</strong></div><p class="pack-desc">${esc(u[pack+'Detail'])}</p><button class="${pack==='bundle'?'btn-primary':'btn-line'}" data-pickpack="${pack}">${esc(u.view)} →</button></section>`).join('')}<p class="demo-warn">${esc(p.noPay)}</p></section>${bottom()}</main>`;
+};
+chapters52=function(){
+ const s=session75();if(!s)return premium52();activate75(s);const u=ui855(),t=txt75();
+ return `<main class="scene">${headerBar('premium')}<section class="page"><div class="eyebrow">${esc(PREM[state.lang].demo)}</div><h1 class="main-heading">${esc(u.choose)}</h1><p>${esc(s.pack==='bundle'?u.bundleHelp:t.singleHelp)}</p><div class="chapter-grid">${TOPICS75.map(k=>`<button class="chapter-choice" data-ep="${k}" ${!allowed75(s,k)?'disabled':''}><span>${EPISODES[k].symbol}</span><strong>${esc(text74().themeTitle[k])}</strong><small>${esc(s.pack==='single'&&s.topic===k?t.selectedTopic:u.view)}</small></button>`).join('')}</div><button class="btn-line" data-route="result">${esc(text74().backFree)}</button></section>${bottom()}</main>`;
+};
+const episodeBefore855=episode52;
+episode52=function(){
+ const s=session75();if(!allowed75(s,sampleEpisode))return chapters52();
+ const template=document.createElement('template');template.innerHTML=episodeBefore855();
+ template.content.querySelectorAll('.g76-fiction,.g76-story-label,.sr65-episode-branch,.sr54-extra,.episode-card,.c81-story-audio,[data-ep-complete],[data-final-route]').forEach(el=>el.remove());
+ template.content.querySelector('.page')?.insertAdjacentHTML('beforeend',`<button class="btn-primary" data-back855="1">${esc(ui855().back)}</button>`);
+ return template.innerHTML;
+};
+finale54=function(){return chapters52();};
+const gotoBefore855=goto;
+goto=function(route){return gotoBefore855(route==='finale54'?'chapters52':route);};
+// Disable retired story events before older capture handlers, including saved runs.
+window.addEventListener('click',event=>{
+ const b=event.target.closest?.('[data-back855],[data-sr65-episode-choice],[data-ep-complete],[data-final-route],[data-extra-choice],[data-ending80],[data-ending-choice80],[data-finish80],[data-finale-choice],[data-finale-next],[data-ep-choice]');
+ if(!b)return;event.preventDefault();event.stopImmediatePropagation();
+ if(b.hasAttribute('data-back855'))goto('chapters52');
+},true);
+Object.assign(ROUTES,{premium:premium52,chapters52,episode52,finale54});
+
   ROUTES.photo = photoView;
   // Consume WebView file-input clicks and route them to the native image picker.
   // Browser-only usage retains its existing file inputs and camera fallback.

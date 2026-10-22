@@ -1,4 +1,4 @@
-name: Build SOUL READER 8.5.4 Android APK
+name: Build SOUL READER 8.5.5 Android APK
 
 on:
   push:
@@ -39,13 +39,13 @@ jobs:
           export NODE_PATH="$RUNNER_TEMP/photo-bridge-test/node_modules"
           export CHROMIUM_PATH="$(command -v google-chrome || command -v chromium)"
           test -n "$CHROMIUM_PATH"
+          # paid855 replaces story75/ending80 tests for the retired fiction flow.
+          node tests/paid855.cjs
           node tests/photo_bridge.cjs
           node tests/reading74.cjs
-          node tests/story75.cjs
           node tests/guidance76.cjs
           node tests/tone78.cjs
           node tests/takeaway79.cjs
-          node tests/ending80.cjs
           node tests/concise81.cjs
           node tests/photo82.cjs
           node tests/reference83.cjs
@@ -78,14 +78,14 @@ jobs:
           python3 scripts/verify_assets.py build/app/outputs/flutter-apk/app-debug.apk
           apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
           "$apksigner" verify --verbose build/app/outputs/flutter-apk/app-debug.apk
-          cp build/app/outputs/flutter-apk/app-debug.apk SOUL_READER_8.5.4.apk
-          sha256sum SOUL_READER_8.5.4.apk > SOUL_READER_8.5.4.apk.sha256
+          cp build/app/outputs/flutter-apk/app-debug.apk SOUL_READER_8.5.5.apk
+          sha256sum SOUL_READER_8.5.5.apk > SOUL_READER_8.5.5.apk.sha256
       - name: Publish installable APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SOUL_READER_8.5.4_Galaxy_APK
+          name: SOUL_READER_8.5.5_Galaxy_APK
           path: |
-            SOUL_READER_8.5.4.apk
-            SOUL_READER_8.5.4.apk.sha256
+            SOUL_READER_8.5.5.apk
+            SOUL_READER_8.5.5.apk.sha256
           if-no-files-found: error
           retention-days: 30
