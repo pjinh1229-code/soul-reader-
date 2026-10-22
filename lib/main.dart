@@ -54,14 +54,19 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
         }
       })
       ..addJavaScriptChannel('PhotoPicker', onMessageReceived: _onPhotoPicker)
-      ..addJavaScriptChannel('FaceScan', onMessageReceived: _onFaceRequest)
-      ..loadFlutterAsset('assets/web/index.html');
-    if (Platform.isAndroid && _web.platform is AndroidWebViewController) {
-      final android = _web.platform as AndroidWebViewController;
-      android.setMediaPlaybackRequiresUserGesture(false);
-    }
+      ..addJavaScriptChannel('FaceScan', onMessageReceived: _onFaceRequest);
+    _loadWebContent();
     // Recover a camera/gallery result on Android after a process restart.
     _restoreLostImage();
+  }
+
+  Future<void> _loadWebContent() async {
+    if (Platform.isAndroid && _web.platform is AndroidWebViewController) {
+      final android = _web.platform as AndroidWebViewController;
+      await android.setMediaPlaybackRequiresUserGesture(false);
+    }
+    if (!mounted) return;
+    await _web.loadFlutterAsset('assets/web/index.html');
   }
 
   Future<void> _restoreLostImage() async {

@@ -20,7 +20,7 @@ const {chromium}=require('playwright');
    assert.equal(await page.locator('.r74-part').first().isVisible(),false);
    assert.equal(await page.locator('.c81-focus,.t78-mode,.p82-report,.r74-summary').count(),0);
    assert.equal(await page.locator('.r74-takeaway').isVisible(),true);
-   assert.equal(await page.locator('#sr60VoicePanel').count(),0,'Old scene dialogue must not push the reading down');
+   assert.equal(await page.locator('.sr856-voice').count(),1,'Show the automatic RYU dialogue once');
    assert.doesNotMatch(await page.locator('.r74-report').textContent(),/등불|첫 장면|류는|류가|달빛/);
    assert.ok((await page.locator('.r74-takeaway p').textContent()).length<500);
    await page.locator('.c81-feature-details > summary').click();

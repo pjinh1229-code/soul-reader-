@@ -27,7 +27,7 @@ const retired='.sr65-episode-branch,.b75-result,.g76-fiction,.g76-story-label,.c
      assert.equal(await page.locator('.sr853-part').count(),6);
      assert.equal(await page.locator('.sr853-overall').count(),1);
      assert.equal(await page.locator(retired).count(),0);
-     assert.equal(await page.locator('[data-sr60-clip]').count(),0,'Retired story audio is not offered on paid pages');
+     assert.equal(await page.locator('.sr856-voice [data-sr60-clip]').count(),1,'Keep the topic introduction, without restoring follow-up story audio');
      assert.equal(await page.locator('[data-back855]').isEnabled(),true,'No decision or completion prerequisite');
      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
      await page.locator('[data-back855]').click();

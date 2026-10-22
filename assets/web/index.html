@@ -898,7 +898,7 @@ const stop=document.getElementById('stopVoice');
 const player=new Audio();player.preload='auto';player.playsInline=true;
 const settings={music:false,voice:true};
 let active='',lastSignature='',sequence=0,loadingTimer=0,fadeToken=0,activePlaying=false;
-let audioPreviewFallback='',audioPreviewTried=false;
+let audioPreviewFallback='',audioPreviewTried=false,lastVoicePanel856=null,lastStatus856={msg:'',type:'info',clip:''};
 const memory=Object.create(null);let dbPromise;
 const db=()=>dbPromise||(dbPromise=new Promise((resolve,reject)=>{if(!indexedDB)return reject(new Error('no indexedDB'));const req=indexedDB.open('soul_reader_ryu_voice60',1);req.onupgradeneeded=()=>req.result.createObjectStore('clips');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)}));
 async function save(k,f){
@@ -917,7 +917,7 @@ return await Promise.race([new Promise(r=>{const q=d.transaction('clips','readon
 const trans=(key)=>state.lang+'|'+key;
 function copyButtons(){toggle.textContent=settings.voice?ui().on:ui().off;toggle.setAttribute('aria-pressed',String(settings.voice));music.textContent=settings.music?'♪ BGM ON':'♪ BGM OFF';music.setAttribute('aria-pressed',String(settings.music));}
 function fade(vol){if(!settings.music)return;let n=++fadeToken,origin=bgm.volume,t0=performance.now();function tick(t){if(n!==fadeToken||!settings.music)return;let p=Math.min(1,(t-t0)/270);bgm.volume=origin+(vol-origin)*p;if(p<1)requestAnimationFrame(tick)}requestAnimationFrame(tick)}
-function message(msg,type='info',clip=''){const e=document.querySelector('#sr60AudioStatus');if(!e)return;e.textContent=msg;e.dataset.type=type;if(clip&&type==='error'){const btn=document.createElement('button');btn.type='button';btn.textContent=ui().upload;btn.addEventListener('click',()=>chooseFile(clip));e.append(' ',btn);}}
+function message(msg,type='info',clip=''){lastStatus856={msg,type,clip};const e=document.querySelector('#sr60AudioStatus');if(!e)return;e.textContent=msg;e.dataset.type=type;if(clip&&type==='error'&&!e.closest('.sr856-voice')){const btn=document.createElement('button');btn.type='button';btn.textContent=ui().upload;btn.addEventListener('click',()=>chooseFile(clip));e.append(' ',btn);}}
 function stopClip(){sequence++;clearTimeout(loadingTimer);activePlaying=false;audioPreviewFallback='';audioPreviewTried=false;player.pause();player.removeAttribute('src');player.load();active='';document.body.classList.remove('ryu56-talking');fade(.27);updatePlayButtons()}
 function updatePlayButtons(){document.querySelectorAll('[data-sr60-clip]').forEach(b=>{const key=b.dataset.sr60Clip;b.textContent=active===key&&!player.paused?ui().pause:active===key&&player.currentTime>0&&!player.ended?ui().listen:ui().listen});}
 function fail(key,reason){clearTimeout(loadingTimer);activePlaying=false;document.body.classList.remove('ryu56-talking');fade(.27);message(reason==='NotAllowedError'?ui().blocked:ui().error,'error',key);const d=document.getElementById('sr64DockStatus');if(d)d.textContent=reason==='NotAllowedError'?ui().blocked:ui().error;updatePlayButtons();}
@@ -953,13 +953,14 @@ loadingTimer=setTimeout(()=>{if(seq===sequence&&!activePlaying)fail(key,'timeout
 try{await player.play()}catch(e){if(seq===sequence)fail(key,e?.name||'error')}
 }
 function keyForScene(){
+const readingVoice=document.querySelector('.sr856-voice');if(readingVoice&&(state.screen==='result'||state.screen==='episode52'))return readingVoice.dataset.voice856;
 if(state.screen==='gwansang')return 'gwansang';
 if(state.screen==='romance')return state.flirtChoice===null?'intro':state.flirtChoice===0?'romance_bold':'romance_gentle';
 if(state.screen==='result')return document.querySelector('.c81-report')?null:(state.resultStep===0?'result':null);
 if(state.screen==='episode52'){if(document.querySelector('.c81-paid-details'))return null;const ep=ep59(sampleEpisode);return ep==='love'?'love_59':ep;}
 if(state.screen==='finale54'){if(document.querySelector('.e80-page'))return null;if(finaleChoice54>=0&&finaleStage55>=1)return CHOICE_STORIES58[state.lang][finaleChoice54].scenes[Math.min(4,finaleStage55)-1].clip;return'final_scene_0'}
 return null;}
-function addClipButtons(){const root=document.querySelector('#app .page');if(!root)return;
+function addClipButtons(){const root=document.querySelector('#app .page');if(!root)return;if(root.querySelector('.sr856-voice')){updatePlayButtons();return;}
 const key=keyForScene();const text={...(state.lang==='ko'?RYU56_TEXT:SR60_TEXT[state.lang]),gwansang:GWANSANG61[state.lang].spoken};
 if(key==='gwansang'){const b=document.createElement('button');b.type='button';b.dataset.sr60Clip=key;b.className='ryu56-play sr61-speak';b.textContent=ui().listen;const g=root.querySelector('.sr61-dialogue');g?.append(b);
 const card=document.createElement('section');card.className='sr611-local';
@@ -970,7 +971,14 @@ g?.after(card);
 if(state.screen==='finale54'){const elems=Array.from(root.querySelectorAll('.sr54-scene,.sr55-intro-scene,.sr55-scene'));if(finaleChoice54<0&&elems.length>=3){elems.slice(0,3).forEach((el,i)=>{let btn=document.createElement('button');btn.type='button';btn.dataset.sr60Clip='final_scene_'+i;btn.className='ryu56-play';btn.textContent=ui().listen;el.append(btn)})}const current=root.querySelector('.sr58-story-scene');if(current&&!current.querySelector('[data-sr60-clip]')){let b=document.createElement('button');b.type='button';b.dataset.sr60Clip=key;b.className='ryu56-play';b.textContent=ui().listen;current.append(b)}}
 const status=document.createElement('div');status.id='sr60AudioStatus';status.className='sr58-sound-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');if(key)root.insertBefore(status,root.children[Math.min(4,root.children.length)]||null);
 updatePlayButtons();}
-function viewChanged(){const sig=[state.lang,state.screen,state.flirtChoice,state.resultStep,sampleEpisode,finaleChoice54,finaleStage55].join('|');if(sig===lastSignature)return;lastSignature=sig;stopClip();copyButtons();addClipButtons();if(settings.voice&&keyForScene())play(keyForScene());}
+function viewChanged(){
+ const panel=document.querySelector('.sr856-voice');
+ const sig=[state.lang,state.screen,state.reading?.id||'',keyForScene(),state.flirtChoice,state.resultStep,sampleEpisode,finaleChoice54,finaleStage55].join('|');
+ if(sig===lastSignature){if(panel!==lastVoicePanel856){lastVoicePanel856=panel;updatePlayButtons();if(panel)message(lastStatus856.msg,lastStatus856.type,lastStatus856.clip);}return;}
+ lastSignature=sig;lastVoicePanel856=panel;stopClip();lastStatus856={msg:'',type:'info',clip:''};copyButtons();addClipButtons();
+ const key=keyForScene();if(settings.voice&&key)play(key);
+}
+
 const file=document.createElement('input');file.type='file';file.accept='.mp3,audio/mpeg';file.multiple=true;file.hidden=true;document.body.append(file);let chosen='';
 function chooseFile(key=''){chosen=key;file.multiple=!key;file.click()}
 file.addEventListener('change',async()=>{let count=0;for(const f of file.files||[]){const m=f.name.match(/(?:^|_)(KO|EN|JP)_(gwansang|intro|romance_bold|romance_gentle|result|love_59|chance|work|bond|final_scene_0|final_scene_1|final_scene_2|door_a[1-4]|lantern_b[1-4])\.mp3$/i);const gw=f.name.match(/(?:gwansang[_-]intro|gwansang)[_-](ko|en|ja)\.mp3$/i);const locale=gw?gw[1].toLowerCase():m?({KO:'ko',EN:'en',JP:'ja'})[m[1].toUpperCase()]:state.lang;const key=chosen||(gw?'gwansang':m?.[2]);if(key&&f.size>1000&&/\.mp3$/i.test(f.name)){await save(locale+'|'+key,f);count++}}
@@ -982,6 +990,11 @@ const link=document.getElementById('sr60Import');link?.addEventListener('click',
 function translateDock(){document.getElementById('sr60ManageTitle').textContent=ui().manage;document.getElementById('sr60ManageInfo').textContent=ui().info;document.getElementById('sr60Import').textContent=ui().upload;}
 const observer=new MutationObserver(()=>{if(state.lang!==document.documentElement.lang){}viewChanged();translateDock()});observer.observe(document.getElementById('app'),{childList:true,subtree:true});
 document.getElementById('app').addEventListener('click',e=>{const b=e.target.closest('[data-sr60-clip],[data-ryu-clip]');if(!b)return;e.stopPropagation();const clip=b.dataset.sr60Clip||b.dataset.ryuClip;if(!clip)return;if(!settings.voice){settings.voice=true;copyButtons()}play(clip,true)},true);
+document.getElementById('app').addEventListener('click',e=>{
+ const b=e.target.closest('[data-replay856],[data-stop856]');if(!b)return;e.preventDefault();e.stopPropagation();
+ stopClip();message('');
+ if(b.hasAttribute('data-replay856')){settings.voice=true;copyButtons();play(b.dataset.replay856,true);}
+},true);
 // Mobile: try again only after user interaction if initial autoplay was prevented.
 let firstTap=false;document.addEventListener('pointerdown',()=>{if(firstTap)return;firstTap=true;if(settings.voice&&keyForScene()&&!active)queueMicrotask(()=>play(keyForScene()))},{once:true,capture:true});
 toggle.addEventListener('click',()=>{settings.voice=!settings.voice;copyButtons();if(settings.voice){lastSignature='';viewChanged()}else{stopClip();message('')}});
@@ -2026,6 +2039,26 @@ window.addEventListener('click',event=>{
  if(b.hasAttribute('data-back855'))goto('chapters52');
 },true);
 Object.assign(ROUTES,{premium:premium52,chapters52,episode52,finale54});
+
+// One visible, localized recorded-dialogue panel on each reading screen.
+function voicePanel856(key){
+ const u={ko:{title:'류의 한마디',play:'▷ 대사 듣기',replay:'↻ 다시 듣기',stop:'■ 정지'},en:{title:'A word from RYU',play:'▷ Play dialogue',replay:'↻ Replay',stop:'■ Stop'},ja:{title:'リュウのひとこと',play:'▷ セリフを聞く',replay:'↻ もう一度',stop:'■ 停止'}}[state.lang];
+ const text=(state.lang==='ko'?RYU56_TEXT:SR60_TEXT[state.lang])[key];
+ return `<section id="sr60VoicePanel" class="sr856-voice" data-voice856="${key}" lang="${state.lang}"><h2>${esc(u.title)}</h2><p class="ryu56-dialogue">${esc(text)}</p><div class="sr856-controls"><button class="btn-line" data-sr60-clip="${key}">${esc(u.play)}</button><button class="btn-line" data-replay856="${key}">${esc(u.replay)}</button><button class="btn-line" data-stop856="1">${esc(u.stop)}</button></div><div id="sr60AudioStatus" role="status" aria-live="polite"></div></section>`;
+}
+function addVoice856(html,key){
+ const t=document.createElement('template');t.innerHTML=html;
+ t.content.querySelectorAll('.c81-voice,#sr60VoicePanel,#sr60AudioStatus').forEach(el=>el.remove());
+ const report=t.content.querySelector('.sr85-report');
+ if(report)report.insertAdjacentHTML('beforebegin',voicePanel856(key));
+ return t.innerHTML;
+}
+const resultBefore856=result;
+result=function(){const html=resultBefore856();return state.reading?addVoice856(html,'result'):html;};
+const episodeBefore856=episode52;
+episode52=function(){const html=episodeBefore856();return allowed75(session75(),sampleEpisode)?addVoice856(html,sampleEpisode==='love'?'love_59':sampleEpisode):html;};
+Object.assign(ROUTES,{result,episode52});
+const css856=document.createElement('style');css856.textContent=`.sr856-voice{padding:18px;margin:16px 0;border:1px solid #caa6d166;border-radius:18px;background:#302038;overflow-wrap:anywhere}.sr856-voice h2{font-size:17px;margin:0 0 10px;color:#ffe4cf}.sr856-voice .ryu56-dialogue{font-size:14px;line-height:1.9;margin:0 0 14px;white-space:pre-line}.sr856-controls{display:flex;flex-wrap:wrap;gap:8px}.sr856-controls .btn-line{width:auto;flex:1 1 auto;margin:0;padding:10px;font-size:12px}.sr856-voice [role=status]{font-size:12px;line-height:1.6;margin-top:8px;color:#dec7de}`;document.head.appendChild(css856);
 
   ROUTES.photo = photoView;
   // Consume WebView file-input clicks and route them to the native image picker.
