@@ -5,7 +5,7 @@ const fixture=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../scripts/ryu_
 const keys=['eyes','brow','smile','aura','nose','jaw'];
 const weights=[['심','강','온'],['온','강','심'],['온','온','심'],['온','강','심'],['강','온','온'],['온','강','심']];
 const topics=['love','chance','work','bond'];
-const pure=html.slice(html.indexOf("const SR853_TOPICS="),html.indexOf('function report853('));
+const pure=html.slice(html.indexOf("const SR853_TOPICS="),html.indexOf('const SR854_LOCALES='));
 const classify=vm.runInNewContext(pure+';classify853');
 const cases={};
 for(let n=0;n<729;n++){
@@ -60,7 +60,7 @@ console.log('PASS: all 729 six-feature combinations, all five energy types, stro
   }
   await page.evaluate(()=>{state.reading.sr67.status='ready';delete state.reading.sr67.face.nose;render()});
   assert.equal(await page.locator('.sr853-overall').count(),0,'Do not classify incomplete six-feature readings');
-  for(const lang of ['en','ja']){await page.evaluate(lang=>{state.lang=lang;render()},lang);assert.equal(await page.locator('.sr853-report').count(),0)}
+  for(const lang of ['en','ja']){await page.evaluate(lang=>{state.lang=lang;render()},lang);assert.equal(await page.locator('.sr853-report').count(),1);assert.equal(await page.locator('.sr853-overall').count(),0)}
   assert.deepEqual(errors,[]);
   console.log('PASS: all 72 supplied topic lines and 20 summaries on real topic screens, access gate, saved snapshot, invalid-input handling and mobile layout');
  }finally{await browser.close()}
