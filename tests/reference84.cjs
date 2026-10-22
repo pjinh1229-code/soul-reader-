@@ -168,8 +168,8 @@ const {chromium}=require('playwright');
   assert.equal(await page.locator('.sr85-report').innerText(),reports[2],'Saved result must retain its own analyzed snapshot');
   await page.evaluate(()=>{state.sr67={status:'manual'};state.reading=buildReading();goto('result')});
   assert.equal(await page.locator('.sr85-part').count(),0,'Manual inputs must not pretend to be ML Kit analysis');
-  for(const lang of ['en','ja']){await fresh(lang);assert.equal(await page.locator('.sr85-report').count(),0);}
-  console.log('PASS: 8.5 active result displays six script sections and summary; varied classifications, saved snapshot, manual gate and locale isolation');
+  for(const lang of ['en','ja']){await fresh(lang);assert.equal(await page.locator('.sr85-report').count(),1);assert.equal(await page.locator('.sr85-part').count(),6);assert.equal(/[가-힣]/u.test(await page.locator('.sr85-report').innerText()),false);}
+  console.log('PASS: 8.5 active result displays six script sections and summary; varied classifications, saved snapshot, manual gate and localized reports');
 
   assert.deepEqual(errors,[]);
  }finally{await browser.close();}

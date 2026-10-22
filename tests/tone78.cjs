@@ -24,7 +24,7 @@ const {chromium}=require('playwright');
    await page.locator('.c81-feature-details > summary').click();
    assert.equal(await page.locator('.r74-part').count(),5);
    assert.equal(await page.locator('.r74-part').first().isVisible(),true);
-   assert.equal(await page.locator('.sr85-part').count(),lang==='ko'?6:0);
+   assert.equal(await page.locator('.sr85-part').count(),6);
    const saved=await page.locator('.r74-report').textContent();
    await page.evaluate(()=>{state.flirtChoice=1;render()});
    assert.equal(await page.locator('.r74-report').textContent(),saved,'Saved report does not change with stale tone selection');
