@@ -1,4 +1,4 @@
-name: Build SOUL READER 8.5.2 Android APK
+name: Build SOUL READER 8.5.3 Android APK
 
 on:
   push:
@@ -50,6 +50,7 @@ jobs:
           node tests/photo82.cjs
           node tests/reference83.cjs
           node tests/reference84.cjs
+          node tests/topics853.cjs
       - name: Verify integrated 8.5 reading script
         shell: bash
         run: |
@@ -76,14 +77,14 @@ jobs:
           python3 scripts/verify_assets.py build/app/outputs/flutter-apk/app-debug.apk
           apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
           "$apksigner" verify --verbose build/app/outputs/flutter-apk/app-debug.apk
-          cp build/app/outputs/flutter-apk/app-debug.apk SOUL_READER_8.5.2.apk
-          sha256sum SOUL_READER_8.5.2.apk > SOUL_READER_8.5.2.apk.sha256
+          cp build/app/outputs/flutter-apk/app-debug.apk SOUL_READER_8.5.3.apk
+          sha256sum SOUL_READER_8.5.3.apk > SOUL_READER_8.5.3.apk.sha256
       - name: Publish installable APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SOUL_READER_8.5.2_Galaxy_APK
+          name: SOUL_READER_8.5.3_Galaxy_APK
           path: |
-            SOUL_READER_8.5.2.apk
-            SOUL_READER_8.5.2.apk.sha256
+            SOUL_READER_8.5.3.apk
+            SOUL_READER_8.5.3.apk.sha256
           if-no-files-found: error
           retention-days: 30
