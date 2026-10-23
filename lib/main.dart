@@ -108,7 +108,8 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
       ]);
       final verifier = HttpPurchaseVerifier(
         baseUrl: const String.fromEnvironment('BILLING_VERIFIER_URL'),
-        packageName: 'com.soulreader.soul_reader',
+        packageName: const String.fromEnvironment('BILLING_PACKAGE_NAME',
+          defaultValue: 'com.soulreader.soul_reader'),
         config: config,
         session: widget.billingSession,
       );

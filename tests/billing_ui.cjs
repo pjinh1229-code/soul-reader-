@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path');
 const {chromium}=require('playwright');
 const html=fs.readFileSync(path.resolve(__dirname,'../assets/web/index.html'),'utf8');
 const billing=fs.readFileSync(path.resolve(__dirname,'../assets/web/billing.js'),'utf8');
-const catalog={status:'ready',configured:true,storeAvailable:true,busy:false,products:[{offerKey:'single',productId:'test.single',price:'₩990',currencyCode:'KRW',rawPrice:990},{offerKey:'bundle',productId:'test.bundle',price:'₩1,990',currencyCode:'KRW',rawPrice:1990}]};
+const catalog={status:'ready',configured:true,storeAvailable:true,busy:false,errorCode:null,products:[{offerKey:'single',productId:'test.single',price:'₩990',currencyCode:'KRW',rawPrice:990},{offerKey:'bundle',productId:'test.bundle',price:'₩1,990',currencyCode:'KRW',rawPrice:1990}]};
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  try{
@@ -29,6 +29,26 @@ const catalog={status:'ready',configured:true,storeAvailable:true,busy:false,pro
    assert.equal(await page.locator('[data-billing-buy]').isDisabled(),true,'Unregistered products cannot be charged');
    assert.equal(await page.locator('[data-billing-restore]').isDisabled(),true);
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+   assert.deepEqual(errors,[]);await page.close();
+  }
+  {
+   const {page,errors}=await open({configured:false});
+   await page.evaluate(()=>soulBillingReceive({type:'entitlements',entitlements:[]}));
+   assert.match(await page.locator('.billing-status').textContent(),/결제 준비 중/,'Startup empty ledger must preserve configuration-required messaging');
+   assert.doesNotMatch(await page.locator('.billing-status').textContent(),/구매 내역을 확인했어/);
+   await state(page,{status:'error',busy:false,errorCode:'verification_failed'});
+   const errorText=await page.locator('.billing-status').textContent();
+   await page.evaluate(()=>soulBillingReceive({type:'entitlements',entitlements:[]}));
+   assert.equal(await page.locator('.billing-status').textContent(),errorText,'Background ledger refresh must preserve an active error');
+   assert.deepEqual(errors,[]);await page.close();
+  }
+  {
+   const {page,errors}=await open();
+   const request=await buy(page,'bundle');
+   await page.evaluate(()=>soulBillingReceive({type:'entitlements',entitlements:[]}));
+   assert.equal(await page.locator('[data-billing-buy]').isDisabled(),true,'An unrelated ledger refresh cannot clear an in-flight purchase');
+   await page.evaluate(e=>soulBillingReceive({type:'grant',entitlement:e}),grant(request));
+   assert.equal(await page.evaluate(()=>state.screen),'chapters52','Matching verified grant retains the original pending purchase context');
    assert.deepEqual(errors,[]);await page.close();
   }
   for(const lang of ['ko','en','ja']){
@@ -83,10 +103,11 @@ const catalog={status:'ready',configured:true,storeAvailable:true,busy:false,pro
    assert.equal(await page.locator('[data-ep]:enabled').count(),4,'Verified bundle opens all topics');
    await page.evaluate(()=>soulBillingReceive({type:'entitlements',entitlements:[]}));
    assert.equal(await page.locator('[data-ep]').count(),0,'Server revocation removes access despite saved local book');
-   await state(page);
+   await state(page);await page.evaluate(()=>goto('premium'));
    await page.locator('[data-billing-restore]').click();
    assert.equal(await page.evaluate(()=>billingMessages.at(-1).action),'restore');
    await page.evaluate(e=>soulBillingReceive({type:'entitlements',entitlements:[e]}),grant(bundle,{entitlementId:'bundle-one',transactionId:'transaction-two'}));
+   assert.match(await page.locator('.billing-status').textContent(),/구매 내역을 확인했어/,'Only an explicit restore request receives restore-complete feedback');
    await state(page);await page.evaluate(()=>goto('chapters52'));
    assert.equal(await page.locator('[data-ep]:enabled').count(),4,'Server ledger restores a consumed pass for the matching saved reading');
    assert.deepEqual(errors,[]);await page.close();

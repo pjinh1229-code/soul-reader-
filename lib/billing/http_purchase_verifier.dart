@@ -92,23 +92,26 @@ class HttpPurchaseVerifier implements PurchaseVerifier {
   final BillingJsonTransport _transport;
 
   @override
-  bool get isConfigured => _base != null &&
-      _base!.scheme == 'https' && _base!.host.isNotEmpty &&
-      _base!.userInfo.isEmpty && !_base!.hasQuery && !_base!.hasFragment &&
-      RegExp(r'^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$')
-          .hasMatch(packageName) && config.isConfigured && session.isConfigured;
+  bool get isConfigured {
+    final base = _base;
+    return base != null && base.scheme == 'https' && base.host.isNotEmpty &&
+        base.userInfo.isEmpty && !base.hasQuery && !base.hasFragment &&
+        RegExp(r'^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$')
+            .hasMatch(packageName) && config.isConfigured && session.isConfigured;
+  }
 
   Future<Map<String, dynamic>> _request(String method, String path,
       [Map<String, dynamic>? body]) async {
-    if (!isConfigured) {
+    final base = _base;
+    if (!isConfigured || base == null) {
       throw const BillingFailure('configuration_required');
     }
     final token = await session.accessToken();
     if (token == null || token.isEmpty || token.contains(RegExp(r'[\r\n]'))) {
       throw const BillingFailure('authentication_required');
     }
-    final prefix = _base!.path.replaceFirst(RegExp(r'/+$'), '');
-    final uri = _base!.replace(path: '$prefix$path');
+    final prefix = base.path.replaceFirst(RegExp(r'/+$'), '');
+    final uri = base.replace(path: '$prefix$path');
     return _transport.send(uri, method, {
       HttpHeaders.authorizationHeader: 'Bearer $token',
       HttpHeaders.acceptHeader: 'application/json',

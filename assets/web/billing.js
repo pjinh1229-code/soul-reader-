@@ -83,12 +83,13 @@
         message=/cancel/i.test(payload.errorCode)?text().cancelled:/pending/i.test(payload.errorCode)?'':text().failed;
       }
     } else if (payload.type==='entitlements') {
+      const explicitRestore=currentRequest?.restore===true;
       app.setEntitlements(payload.entitlements,true);
       if (pendingTopic) {
         const p=pendingTopic,pass=context().entitlement;
         if (pass?.entitlementId===p.entitlementId && pass.topic===p.topic) {pendingTopic=null;if(context().readingId===p.readingId){app.openTopic(p.topic);return;}}
       }
-      currentRequest=null;message=text().restored;
+      if(explicitRestore){currentRequest=null;message=text().restored;}
     } else if (payload.type==='grant' && payload.entitlement) {
       const pass=payload.entitlement,pending=currentRequest,selected=pendingTopic;
       app.setEntitlements([pass]);
