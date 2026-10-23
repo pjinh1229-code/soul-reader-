@@ -1,8 +1,8 @@
-name: Build SOUL READER 8.5.6 Android APK
+name: Build SOUL READER 8.5.6 payment preparation APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/play-billing-8.5.6]
   workflow_dispatch:
 
 permissions:
@@ -40,6 +40,7 @@ jobs:
           export CHROMIUM_PATH="$(command -v google-chrome || command -v chromium)"
           test -n "$CHROMIUM_PATH"
           # paid855 replaces story75/ending80 tests for the retired fiction flow.
+          node tests/billing_ui.cjs
           node tests/voice856.cjs
           node tests/paid855.cjs
           node tests/photo_bridge.cjs
@@ -67,11 +68,38 @@ jobs:
           print("8.5 integrated script verified")
           PY
       - name: Dart static analysis
-        run: flutter analyze --no-fatal-infos
+        shell: bash
+        run: |
+          set +e
+          flutter analyze --no-fatal-infos > "$RUNNER_TEMP/analyze.log" 2>&1
+          check_status=$?
+          cat "$RUNNER_TEMP/analyze.log"
+          if [ "$check_status" -ne 0 ]; then
+            tail -n 160 "$RUNNER_TEMP/analyze.log" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$check_status"
       - name: Test ML Kit result validation
-        run: flutter test test/face_measure_test.dart
+        shell: bash
+        run: |
+          set +e
+          flutter test > "$RUNNER_TEMP/tests.log" 2>&1
+          check_status=$?
+          cat "$RUNNER_TEMP/tests.log"
+          if [ "$check_status" -ne 0 ]; then
+            tail -n 160 "$RUNNER_TEMP/tests.log" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$check_status"
       - name: Build signed debug APK for Galaxy installation
-        run: flutter build apk --debug
+        shell: bash
+        run: |
+          set +e
+          flutter build apk --debug > "$RUNNER_TEMP/apk-build.log" 2>&1
+          check_status=$?
+          cat "$RUNNER_TEMP/apk-build.log"
+          if [ "$check_status" -ne 0 ]; then
+            tail -n 160 "$RUNNER_TEMP/apk-build.log" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$check_status"
       - name: Verify APK audio and signature
         shell: bash
         run: |
@@ -79,14 +107,14 @@ jobs:
           python3 scripts/verify_assets.py build/app/outputs/flutter-apk/app-debug.apk
           apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
           "$apksigner" verify --verbose build/app/outputs/flutter-apk/app-debug.apk
-          cp build/app/outputs/flutter-apk/app-debug.apk SOUL_READER_8.5.6.apk
-          sha256sum SOUL_READER_8.5.6.apk > SOUL_READER_8.5.6.apk.sha256
+          cp build/app/outputs/flutter-apk/app-debug.apk SOUL_READER_8.5.6_PAYMENT_PREP.apk
+          sha256sum SOUL_READER_8.5.6_PAYMENT_PREP.apk > SOUL_READER_8.5.6_PAYMENT_PREP.apk.sha256
       - name: Publish installable APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SOUL_READER_8.5.6_Galaxy_APK
+          name: SOUL_READER_8.5.6_PAYMENT_PREP_Galaxy_APK
           path: |
-            SOUL_READER_8.5.6.apk
-            SOUL_READER_8.5.6.apk.sha256
+            SOUL_READER_8.5.6_PAYMENT_PREP.apk
+            SOUL_READER_8.5.6_PAYMENT_PREP.apk.sha256
           if-no-files-found: error
           retention-days: 30

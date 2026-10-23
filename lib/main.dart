@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
@@ -10,22 +11,28 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import 'face_measure.dart';
+import 'billing/billing_controller.dart';
+import 'billing/http_purchase_verifier.dart';
+import 'billing/pending_journal.dart';
+import 'billing/play_store_gateway.dart';
 
 void main() => runApp(const SoulReaderApp());
 
 class SoulReaderApp extends StatelessWidget {
-  const SoulReaderApp({super.key});
+  const SoulReaderApp({super.key, this.billingSession = const MissingBillingSession()});
+  final BillingSessionProvider billingSession;
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'SOUL READER',
         debugShowCheckedModeBanner: false,
         theme: ThemeData.dark(useMaterial3: true),
-        home: const SoulReaderHome(),
+        home: SoulReaderHome(billingSession: billingSession),
       );
 }
 
 class SoulReaderHome extends StatefulWidget {
-  const SoulReaderHome({super.key});
+  const SoulReaderHome({super.key, this.billingSession = const MissingBillingSession()});
+  final BillingSessionProvider billingSession;
   @override
   State<SoulReaderHome> createState() => _SoulReaderHomeState();
 }
@@ -37,6 +44,17 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
   bool _consented = false;
   bool _busy = false;
   String? _message;
+  BillingController? _billing;
+  HttpPurchaseVerifier? _purchaseVerifier;
+  Future<void>? _billingInitialization;
+  final Map<String, VerifiedGrant> _grants = {};
+  final List<Map<String, dynamic>> _billingOutbox = [];
+  Future<void> _billingJsQueue = Future<void>.value();
+  bool _webPageReady = false;
+  Map<String, dynamic> _billingState = {
+    'status': 'unconfigured', 'configured': false,
+    'storeAvailable': false, 'busy': false, 'products': <Object>[],
+  };
 
   @override
   void initState() {
@@ -54,10 +72,157 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
         }
       })
       ..addJavaScriptChannel('PhotoPicker', onMessageReceived: _onPhotoPicker)
-      ..addJavaScriptChannel('FaceScan', onMessageReceived: _onFaceRequest);
+      ..addJavaScriptChannel('FaceScan', onMessageReceived: _onFaceRequest)
+      ..addJavaScriptChannel('StoreBilling', onMessageReceived: _onBillingMessage)
+      ..setNavigationDelegate(NavigationDelegate(
+        onNavigationRequest: (request) {
+          final uri = Uri.tryParse(request.url);
+          final trusted = uri != null && uri.scheme == 'file' &&
+              uri.path.endsWith('/assets/web/index.html');
+          return trusted ? NavigationDecision.navigate : NavigationDecision.prevent;
+        },
+        onPageFinished: (_) async {
+          if (!mounted) return;
+          _webPageReady = true;
+          final pending = List<Map<String, dynamic>>.from(_billingOutbox);
+          _billingOutbox.clear();
+          for (final payload in pending) {
+            await _emitBilling(payload);
+          }
+          await _emitBilling({'type': 'state', ..._billingState});
+        },
+      ));
+    _billingInitialization = _initializeBilling();
     _loadWebContent();
     // Recover a camera/gallery result on Android after a process restart.
     _restoreLostImage();
+  }
+
+  Future<void> _initializeBilling() async {
+    try {
+      final directory = await getApplicationSupportDirectory();
+      if (!mounted) return;
+      final config = BillingConfig(offers: const [
+        BillingOffer(key: 'single', productId: String.fromEnvironment('BILLING_SINGLE_PRODUCT')),
+        BillingOffer(key: 'bundle', productId: String.fromEnvironment('BILLING_BUNDLE_PRODUCT')),
+      ]);
+      final verifier = HttpPurchaseVerifier(
+        baseUrl: const String.fromEnvironment('BILLING_VERIFIER_URL'),
+        packageName: 'com.soulreader.soul_reader',
+        config: config,
+        session: widget.billingSession,
+      );
+      _purchaseVerifier = verifier;
+      _billing = BillingController(
+        config: config,
+        store: PlayStoreGateway(),
+        verifier: verifier,
+        journal: FilePendingPurchaseJournal(File('${directory.path}/billing_pending.json')),
+        onState: (snapshot) {
+          final status = switch (snapshot['status']) {
+            'configuration_required' => 'unconfigured',
+            'initializing' => 'loading',
+            'store_unavailable' || 'products_unavailable' => 'unavailable',
+            final other => other,
+          };
+          _billingState = {...snapshot, 'status': status};
+          unawaited(_emitBilling({'type': 'state', ..._billingState}));
+        },
+        onEntitlements: (grants) async {
+          _grants
+            ..clear()
+            ..addEntries(grants.map((grant) => MapEntry(grant.entitlementId, grant)));
+          await _emitBilling({'type': 'entitlements',
+            'entitlements': grants.map((grant) => grant.toJson()).toList()});
+        },
+        onGrant: (grant) async {
+          _grants[grant.entitlementId] = grant;
+          await _emitBilling({'type': 'grant', 'entitlement': grant.toJson()});
+        },
+      );
+      await _billing!.initialize();
+      if (_billing!.isConfigured) {
+        await _billing!.restore();
+      } else {
+        await _emitBilling({'type': 'entitlements', 'entitlements': <Object>[]});
+      }
+    } catch (_) {
+      _billingState = {'status': 'error', 'configured': false,
+        'storeAvailable': false, 'busy': false, 'products': <Object>[],
+        'errorCode': 'billing_initialization_failed'};
+      await _emitBilling({'type': 'state', ..._billingState});
+    }
+  }
+
+  Future<void> _emitBilling(Map<String, dynamic> payload) {
+    if (!mounted) return Future<void>.value();
+    if (!_webPageReady) {
+      if (payload['type'] == 'state') {
+        _billingOutbox.removeWhere((value) => value['type'] == 'state');
+      }
+      _billingOutbox.add(payload);
+      return Future<void>.value();
+    }
+    final next = _billingJsQueue.then((_) async {
+      if (!mounted) return;
+      await _web.runJavaScript(
+        'if(window.soulBillingReceive)window.soulBillingReceive(${jsonEncode(payload)});');
+    });
+    _billingJsQueue = next.catchError((Object _) {});
+    return _billingJsQueue;
+  }
+
+  Future<void> _onBillingMessage(JavaScriptMessage message) async {
+    String? requestId;
+    try {
+      if (message.message.length > 4096) throw const BillingFailure('invalid_request');
+      final request = jsonDecode(message.message) as Map<String, dynamic>;
+      requestId = request['requestId'] as String?;
+      await _billingInitialization;
+      if (!mounted) return;
+      final controller = _billing;
+      if (controller == null) throw const BillingFailure('configuration_required');
+      switch (request['action']) {
+        case 'status':
+          if (controller.isConfigured && controller.snapshot['busy'] != true) {
+            await controller.restore();
+          }
+          await _emitBilling({'type': 'state', ..._billingState});
+          if (controller.snapshot['busy'] != true) {
+            await _emitBilling({'type': 'entitlements',
+              'entitlements': _grants.values.map((grant) => grant.toJson()).toList()});
+          }
+          break;
+        case 'buy':
+          final offer = request['offerKey'];
+          final reading = request['readingId'];
+          if (offer is! String || reading is! String || requestId == null) {
+            throw const BillingFailure('invalid_purchase_context');
+          }
+          await controller.buy(offer, requestId: requestId, readingId: reading);
+          break;
+        case 'restore':
+          await controller.restore();
+          break;
+        case 'selectTopic':
+          final id = request['entitlementId'];
+          final topic = request['topic'];
+          final grant = _grants[id];
+          if (grant == null || topic is! String ||
+              request['readingId'] != grant.readingId) {
+            throw const BillingFailure('invalid_entitlement');
+          }
+          final selected = await _purchaseVerifier!.selectTopic(grant, topic);
+          _grants[selected.entitlementId] = selected;
+          await _emitBilling({'type': 'grant', 'entitlement': selected.toJson()});
+          break;
+        default:
+          throw const BillingFailure('invalid_request');
+      }
+    } catch (error) {
+      await _emitBilling({'type': 'error', 'requestId': requestId,
+        'code': error is BillingFailure ? error.code : 'billing_request_failed'});
+    }
   }
 
   Future<void> _loadWebContent() async {
@@ -164,6 +329,8 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
 
   @override
   void dispose() {
+    final billing = _billing;
+    if (billing != null) unawaited(billing.dispose());
     FaceMeasure.close();
     super.dispose();
   }

@@ -1,7 +1,7 @@
 name: soul_reader
 description: SOUL READER native Android/iOS ML Kit face detection prototype.
 publish_to: none
-version: 8.5.6+93
+version: 8.5.6+94
 
 environment:
   sdk: '>=3.12.0 <4.0.0'
@@ -14,6 +14,8 @@ dependencies:
   webview_flutter: ^4.14.1
   webview_flutter_android: ^4.14.1
   path_provider: ^2.1.5
+  in_app_purchase: 3.3.1
+  in_app_purchase_android: 0.5.5
 
 dev_dependencies:
   flutter_test:
@@ -24,6 +26,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/web/index.html
+    - assets/web/billing.js
     - assets/web/icon-192.png
     - assets/web/icon-512.png
     - assets/web/audio/

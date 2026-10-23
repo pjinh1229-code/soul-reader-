@@ -2060,6 +2060,79 @@ episode52=function(){const html=episodeBefore856();return allowed75(session75(),
 Object.assign(ROUTES,{result,episode52});
 const css856=document.createElement('style');css856.textContent=`.sr856-voice{padding:18px;margin:16px 0;border:1px solid #caa6d166;border-radius:18px;background:#302038;overflow-wrap:anywhere}.sr856-voice h2{font-size:17px;margin:0 0 10px;color:#ffe4cf}.sr856-voice .ryu56-dialogue{font-size:14px;line-height:1.9;margin:0 0 14px;white-space:pre-line}.sr856-controls{display:flex;flex-wrap:wrap;gap:8px}.sr856-controls .btn-line{width:auto;flex:1 1 auto;margin:0;padding:10px;font-size:12px}.sr856-voice [role=status]{font-size:12px;line-height:1.6;margin-top:8px;color:#dec7de}`;document.head.appendChild(css856);
 
+// Payment access is authoritative only after a native, server-verified grant.
+let billingPaymentsEnabled=!!window.StoreBilling;
+const billingGrants=new Map(),billingReadings=new Map();
+const billingLegacySession=session75,billingLegacyAllowed=allowed75;
+function billingSnapshotReading(reading){return JSON.parse(JSON.stringify(reading,(key,value)=>/^(photoData|photoUrl|dataUrl|imageData|imageBytes|photo|image|stream)$/i.test(key)||(typeof value==='string'&&/^(data:image\/|blob:|file:|content:)/i.test(value))?undefined:value))}
+function billingRememberReading(){if(state.reading?.id)billingReadings.set(state.reading.id,billingSnapshotReading(state.reading))}
+function billingSyncSession(id){
+ const grant=billingGrants.get(id);if(!grant)return null;
+ const reading=state.reading?.id===id?state.reading:billingReadings.get(id)||book75[id]?.reading;
+ if(!reading)return null;
+ const s=book75[id]||{id,choices:{},completed:[]};
+ Object.assign(s,{pack:grant.offerKey,topic:grant.topic,unlocked:true,billingEntitlementId:grant.entitlementId,reading:billingSnapshotReading(reading),updatedAt:Date.now()});
+ delete s.billingPending;book75[id]=s;
+ try{localStorage.setItem('sr75-stories',JSON.stringify(book75))}catch{}
+ return s;
+}
+session75=function(){if(!billingPaymentsEnabled)return billingLegacySession();return state.reading?.id?billingSyncSession(state.reading.id):null};
+allowed75=function(s,key){if(!billingPaymentsEnabled)return billingLegacyAllowed(s,key);return !!s&&TOPICS75.includes(key)&&(s.pack==='bundle'||s.topic===key)};
+const billingLegacyChapters=chapters52;
+chapters52=function(){
+ const html=billingLegacyChapters();if(!billingPaymentsEnabled)return html;
+ const s=session75();if(!s||s.pack!=='single'||s.topic!==null)return html;
+ const t=document.createElement('template');t.innerHTML=html;
+ t.content.querySelectorAll('[data-ep]').forEach(button=>button.disabled=!!window.SoulBilling?.isBusy());
+ return t.innerHTML;
+};
+ROUTES.chapters52=chapters52;
+window.SoulBillingApp=Object.freeze({
+ enable(){billingPaymentsEnabled=true;for(const lang of ['ko','en','ja'])PREM[lang].demo=({ko:'구매한 이용권',en:'Purchased pass',ja:'購入したパス'})[lang];},
+ persistPurchaseReading({requestId,offerKey}){
+  if(!state.reading?.id||typeof requestId!=='string'||!['single','bundle'].includes(offerKey))return false;
+  try{
+   const reading=billingSnapshotReading(state.reading),id=reading.id,previous=book75[id]||{id,choices:{},completed:[]};
+   const saved={...previous,id,reading,unlocked:billingGrants.has(id),billingPending:{requestId,offerKey,createdAt:Date.now()},updatedAt:Date.now()};
+   const next={...book75,[id]:saved},serialized=JSON.stringify(next);
+   localStorage.setItem('sr75-stories',serialized);
+   if(localStorage.getItem('sr75-stories')!==serialized)return false;
+   book75=next;billingReadings.set(id,reading);return true;
+  }catch{return false;}
+ },
+ context(){billingRememberReading();const e=billingGrants.get(state.reading?.id);return {lang:state.lang,screen:state.screen,readingId:state.reading?.id||null,offerKey:samplePack,entitlement:e?{...e}:null,ownedReadings:[...billingGrants.values()].filter(g=>book75[g.readingId]?.reading).map(g=>({readingId:g.readingId,offerKey:g.offerKey,date:book75[g.readingId].reading.date||null})),labels:{...ui855()}}},
+ shell(body,back='premium'){return `<main class="scene">${headerBar(back)}<section class="page billing-page">${body}</section>${bottom()}</main>`},
+ installViews(views){premium52=()=>views.premium(this.context());checkout52=()=>views.checkout(this.context());ROUTES.premium=premium52;ROUTES.checkout52=checkout52;},
+ refresh(){render()},notice(message){notify(message)},route(name){goto(name)},
+ setEntitlements(records,replace=false){
+  if(replace)billingGrants.clear();
+  for(const record of Array.isArray(records)?records:[]){
+   if(!record||typeof record.entitlementId!=='string'||!record.entitlementId||typeof record.readingId!=='string'||!record.readingId||!['single','bundle'].includes(record.offerKey))continue;
+   const topic=record.topic===null||record.topic===undefined?null:record.topic;if(topic!==null&&!TOPICS75.includes(topic))continue;
+   const grant={entitlementId:record.entitlementId,readingId:record.readingId,offerKey:record.offerKey,topic,productId:String(record.productId||''),transactionId:String(record.transactionId||''),requestId:String(record.requestId||'')};
+   const previous=billingGrants.get(grant.readingId);
+   if(previous?.offerKey==='bundle'&&grant.offerKey==='single')continue;
+   billingGrants.set(grant.readingId,grant);billingSyncSession(grant.readingId);
+  }
+ },
+ openTopic(topic){const s=session75();if(!allowed75(s,topic))return false;sampleEpisode=topic;activate75(s);goto('episode52');return true;}
+});
+// This guard also protects an Android page if the optional UI asset fails to load.
+window.addEventListener('click',event=>{
+ if(!billingPaymentsEnabled)return;
+ const button=event.target.closest?.('[data-demo-unlock],[data-resume75],[data-ep]');if(!button)return;
+ if(button.hasAttribute('data-resume75')){
+  if(billingGrants.has(button.dataset.resume75))return;
+ }else if(button.hasAttribute('data-ep')){
+  const s=session75();if(s&&(s.pack==='bundle'||s.topic===button.dataset.ep))return;
+  event.preventDefault();event.stopImmediatePropagation();
+  if(s&&s.pack==='single'&&s.topic===null&&window.SoulBilling?.selectTopic)window.SoulBilling.selectTopic(button.dataset.ep);
+  return;
+ }
+ event.preventDefault();event.stopImmediatePropagation();
+ notify(({ko:'구매 확인이 완료된 이용권만 사용할 수 있어.',en:'A verified purchased pass is required.',ja:'購入確認済みのパスが必要だよ。'})[state.lang]);
+},true);
+
   ROUTES.photo = photoView;
   // Consume WebView file-input clicks and route them to the native image picker.
   // Browser-only usage retains its existing file inputs and camera fallback.
@@ -2121,3 +2194,5 @@ if('serviceWorker' in navigator && location.protocol==='https:')navigator.servic
 
 
 
+
+<script src="billing.js"></script>
