@@ -90,3 +90,5 @@
 개인정보처리방침과 데이터 보안 설문은 최종 로그인·서버·SDK 동작을 확인한 뒤 작성합니다. 얼굴 윤곽 측정이 기기 내에서 이뤄진다는 이유만으로 앱 전체를 ‘데이터 수집 없음’으로 신고하지 않습니다.
 
 구현 현황과 서버 API 계약: [PLAY_BILLING_SETUP.md](PLAY_BILLING_SETUP.md)
+
+한국어·영어·일본어 스토어 소개와 영상 대본 초안: [GLOBAL_LAUNCH_MARKETING.md](GLOBAL_LAUNCH_MARKETING.md)
