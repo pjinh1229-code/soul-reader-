@@ -50,6 +50,7 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
   final Map<String, VerifiedGrant> _grants = {};
   final List<Map<String, dynamic>> _billingOutbox = [];
   Future<void> _billingJsQueue = Future<void>.value();
+  Future<void> _billingCommandQueue = Future<void>.value();
   bool _webPageReady = false;
   Map<String, dynamic> _billingState = {
     'status': 'unconfigured', 'configured': false,
@@ -173,7 +174,15 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
     return _billingJsQueue;
   }
 
-  Future<void> _onBillingMessage(JavaScriptMessage message) async {
+  void _onBillingMessage(JavaScriptMessage message) {
+    // A late ledger refresh must finish before a topic selection can update
+    // the same entitlement. Keep all bridge commands in their arrival order.
+    _billingCommandQueue = _billingCommandQueue
+        .then((_) => _handleBillingMessage(message))
+        .catchError((Object _) {});
+  }
+
+  Future<void> _handleBillingMessage(JavaScriptMessage message) async {
     String? requestId;
     try {
       if (message.message.length > 4096) throw const BillingFailure('invalid_request');
