@@ -31,6 +31,17 @@ const catalog={status:'ready',configured:true,storeAvailable:true,busy:false,pro
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
    assert.deepEqual(errors,[]);await page.close();
   }
+  for(const lang of ['ko','en','ja']){
+   const {page,errors}=await open({lang});
+   const request=await buy(page,'bundle');
+   await page.evaluate(e=>soulBillingReceive({type:'grant',entitlement:e}),grant(request));
+   const stale=/DEMO|NO REAL PAYMENT|체험 모드|실제 결제 없음|デモモード|決済なし/i;
+   assert.doesNotMatch(await page.locator('.page').textContent(),stale,'Verified chapter selection cannot retain demo payment labels');
+   await page.locator('[data-ep="work"]').click();
+   assert.doesNotMatch(await page.locator('.page').textContent(),stale,'Verified paid reading cannot retain demo payment labels');
+   assert.doesNotMatch(await page.locator('#sr70-panel').textContent(),/결제는 데모입니다/,'Payment preparation updates the old test panel caption');
+   assert.deepEqual(errors,[]);await page.close();
+  }
   {
    const {page,errors}=await open();
    assert.deepEqual(await page.locator('.pack-price').allTextContents(),['₩990','₩1,990'],'Prices come from native catalog');

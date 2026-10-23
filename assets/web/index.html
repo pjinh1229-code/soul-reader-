@@ -2088,7 +2088,7 @@ chapters52=function(){
 };
 ROUTES.chapters52=chapters52;
 window.SoulBillingApp=Object.freeze({
- enable(){billingPaymentsEnabled=true;for(const lang of ['ko','en','ja'])PREM[lang].demo=({ko:'구매한 이용권',en:'Purchased pass',ja:'購入したパス'})[lang];},
+ enable(){billingPaymentsEnabled=true;for(const lang of ['ko','en','ja']){PREM[lang].demo=({ko:'구매 확인된 이용권',en:'Verified purchased pass',ja:'購入確認済みのパス'})[lang];PREM[lang].noPay=({ko:'이용권은 스토어 구매 확인 후 적용돼. 구매와 환불 안내는 스토어에서 확인해 줘.',en:'Passes apply after store purchase verification. Review purchase and refund information in the store.',ja:'パスはストアでの購入確認後に適用されるよ。購入と払い戻しの案内はストアで確認してね。'})[lang];}document.querySelectorAll('#sr70-panel p').forEach(p=>{p.textContent=p.textContent.replace('결제는 데모입니다.','이용권은 구매 확인 후 적용됩니다.')});},
  persistPurchaseReading({requestId,offerKey}){
   if(!state.reading?.id||typeof requestId!=='string'||!['single','bundle'].includes(offerKey))return false;
   try{
