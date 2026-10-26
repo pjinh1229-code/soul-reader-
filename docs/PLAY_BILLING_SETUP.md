@@ -21,6 +21,8 @@
 
 ```bash
 bash scripts/prepare_android.sh
+# SOUL_UPLOAD_* 설정과 외부 업로드 키를 준비한 뒤 실행합니다(아래 설명).
+python3 scripts/configure_release_signing.py
 flutter analyze --no-fatal-infos
 flutter test
 flutter build appbundle --release
@@ -29,6 +31,34 @@ flutter build appbundle --release
 생성된 `build/app/outputs/bundle/release/app-release.aab`를 내부 테스트 트랙에 올립니다. 필요한 상품 ID·서버 주소 등 앱 결제 설정도 실제 등록값으로 지정해야 합니다.
 
 앱 설정 이름은 `BILLING_SINGLE_PRODUCT`, `BILLING_BUNDLE_PRODUCT`, `BILLING_VERIFIER_URL`, `BILLING_PACKAGE_NAME`입니다. 예를 들어 상품 ID는 `--dart-define=BILLING_SINGLE_PRODUCT=soul_reading_single`로 전달합니다. 서버 주소는 HTTPS이며, 패키지명은 실제 Android `applicationId`와 서버 허용 목록에 일치시킵니다. 기본 패키지를 바꾸면 Android 생성·설정 스크립트도 함께 수정해야 합니다. 이 값들은 공개 설정이며 인증 토큰을 넣는 용도가 아닙니다. CI 확인용 APK는 이 설정을 비워 두므로 구매가 비활성화됩니다.
+
+### 명시적인 업로드 서명과 내부 테스트 AAB
+
+Flutter가 생성하는 기본 release 설정은 debug 키를 사용하므로 `--release`만 붙여서는 Play 업로드 서명이 준비되지 않습니다. `configure_release_signing.py`는 아래 네 환경 설정으로 생성된 Android 프로젝트에 명시적인 업로드 서명을 적용합니다. 키 파일은 저장소 밖에 보관하고 절대 경로를 사용합니다.
+
+- `SOUL_UPLOAD_KEYSTORE_PATH`: 외부 업로드 키 파일의 절대 경로
+- `SOUL_UPLOAD_KEYSTORE_PASSWORD`: 키 저장소 비밀번호
+- `SOUL_UPLOAD_KEY_ALIAS`: 업로드 키 별칭
+- `SOUL_UPLOAD_KEY_PASSWORD`: 해당 키 비밀번호
+
+비밀번호는 로컬 보안 설정 또는 CI Secrets로 전달합니다. 생성되는 `android/key.properties`는 Git에서 제외되며 권한은 0600입니다. 설정이 없거나 생성된 Gradle 템플릿이 예상과 다르면 debug 서명으로 대체하지 않고 중단합니다. 기존 AAB 업로드가 있다면 기존 인증서와 일치하는 업로드 키를 사용해야 합니다. 첫 업로드용 새 키를 만들 때는 소유자가 안전하게 백업하고 Play App Signing 설정을 확인합니다.
+
+GitHub Actions의 기존 Android 워크플로에 수동 실행용 `artifact_type=internal_aab`를 추가했습니다. 저장소의 **Settings → Secrets and variables → Actions → Repository secrets**에 다음 네 값을 안전하게 설정한 뒤 사용합니다. 채팅·커밋·앱 에셋에는 넣지 않습니다.
+
+| Repository secret | 내용 |
+| --- | --- |
+| `SOUL_UPLOAD_KEYSTORE_BASE64` | 외부 업로드 키 파일의 한 줄 base64 인코딩 |
+| `SOUL_UPLOAD_KEYSTORE_PASSWORD` | 키 저장소 비밀번호 |
+| `SOUL_UPLOAD_KEY_ALIAS` | 업로드 키 별칭 |
+| `SOUL_UPLOAD_KEY_PASSWORD` | 해당 키 비밀번호 |
+
+base64는 암호화가 아니므로 키와 동일하게 비공개로 취급합니다. CI는 runner 임시 경로에 키를 복원하고, 원본 70개 음원·AAB 서명·업로드 인증서 일치 여부를 확인한 뒤 AAB와 체크섬만 산출물로 보관합니다. 키와 비밀번호는 산출물에 포함하지 않으며 작업 종료 시 임시 키와 properties 파일을 삭제합니다.
+
+워크플로 입력 `version_code`는 Play의 이전 업로드보다 큰 정수로 지정합니다(제안 기본값 95, 이전 업로드 값은 미확인). Actions 화면에 새 수동 입력이 보이지 않으면 해당 워크플로 변경을 기본 브랜치에 반영해야 합니다.
+
+이 수동 AAB는 **결제 라이브러리와 패키지를 먼저 등록하기 위한 내부 테스트용 결제 준비 빌드**입니다. 상품·서버 주소·인증 세션을 미설정 상태로 두므로 구매가 비활성화되어 있습니다. 이 번들로 실제 결제 테스트를 완료했다고 안내하지 않습니다. 운영 결제용 빌드는 아래 서버·로그인 구현 이후 별도로 준비합니다.
+
+일반 APK CI에는 임시 테스트 키를 사용한 release 컴파일 검사도 추가했습니다. 이 검사의 키와 AAB는 삭제하고 배포하지 않습니다. 실제 업로드용 키 없이도 생성된 Kotlin 서명 설정을 검증하기 위한 검사이며, 소유자의 업로드 키를 대체하지 않습니다.
 
 ## 2. 인증·구매 검증 서버
 

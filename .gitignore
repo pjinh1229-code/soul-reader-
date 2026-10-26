@@ -5,3 +5,8 @@
 /ios/
 *.iml
 __pycache__/
+*.jks
+*.keystore
+*.p12
+*.pfx
+key.properties
