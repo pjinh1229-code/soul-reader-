@@ -12,7 +12,7 @@
    | 한 주제 | `soul_reading_single` | ₩990 | 구매한 풀이 한 건의 네 주제 중 하나 |
    | 네 주제 합본 | `soul_reading_bundle` | ₩1,990 | 구매한 풀이 한 건의 네 주제 모두 |
 
-   두 상품 ID는 **등록 전 제안값**입니다. 실제로 만든 ID를 앱과 서버의 허용 목록에 동일하게 설정하세요. 앱에 보이는 최종 가격은 Google Play가 반환한 현지화 가격을 사용합니다. 코드에 적힌 금액만 바꿔서는 판매 가격이 바뀌지 않습니다.
+   소유자가 위 상품 ID와 `single`·`bundle` 구매 옵션으로 등록했다고 알려주었습니다. 실제 Play 응답은 연결 후 검증합니다. 앱에 보이는 최종 가격은 Google Play가 반환한 현지화 가격을 사용합니다. 코드에 적힌 금액만 바꿔서는 판매 가격이 바뀌지 않습니다.
    구매 한 번에 이용권 한 개를 제공하므로 다중 수량 판매는 사용하지 않고, 서버에서도 구매 수량을 확인해야 합니다.
 3. 정식 업로드 서명을 설정하고 Play App Signing에 맞는 release AAB를 만듭니다. 현재 debug APK 빌드 성공만으로 출시용 서명 구성이 완료되지는 않습니다. 업로드 키·비밀번호는 저장소나 앱 에셋에 넣지 마세요.
 4. 내부 테스트 트랙에 AAB를 올리고 테스터를 등록합니다. 결제 시험용 Google 계정은 Play Console의 라이선스 테스트에도 추가합니다. 테스터 계정으로 테스트 참여 후 Play에서 설치해 구매·취소·대기 결제·앱 재실행을 확인하세요. 라이선스 테스트 결제와 실제 청구되는 구매를 구분해야 합니다.
@@ -30,7 +30,7 @@ flutter build appbundle --release
 
 생성된 `build/app/outputs/bundle/release/app-release.aab`를 내부 테스트 트랙에 올립니다. 필요한 상품 ID·서버 주소 등 앱 결제 설정도 실제 등록값으로 지정해야 합니다.
 
-앱 설정 이름은 `BILLING_SINGLE_PRODUCT`, `BILLING_BUNDLE_PRODUCT`, `BILLING_VERIFIER_URL`, `BILLING_PACKAGE_NAME`입니다. 예를 들어 상품 ID는 `--dart-define=BILLING_SINGLE_PRODUCT=soul_reading_single`로 전달합니다. 서버 주소는 HTTPS이며, 패키지명은 실제 Android `applicationId`와 서버 허용 목록에 일치시킵니다. 기본 패키지를 바꾸면 Android 생성·설정 스크립트도 함께 수정해야 합니다. 이 값들은 공개 설정이며 인증 토큰을 넣는 용도가 아닙니다. CI 확인용 APK는 이 설정을 비워 두므로 구매가 비활성화됩니다.
+앱 설정 이름은 `BILLING_SINGLE_PRODUCT`, `BILLING_BUNDLE_PRODUCT`, `BILLING_VERIFIER_URL`, `BILLING_PACKAGE_NAME`입니다. 상품 ID는 위 등록값이 기본값이며 `--dart-define=BILLING_SINGLE_PRODUCT=soul_reading_single` 형태로 지정할 수도 있습니다. 서버 주소는 HTTPS이며, 패키지명은 실제 Android `applicationId`와 서버 허용 목록에 일치시킵니다. 기본 패키지를 바꾸면 Android 생성·설정 스크립트도 함께 수정해야 합니다. 이 값들은 공개 설정이며 인증 토큰을 넣는 용도가 아닙니다. CI 확인용 APK는 서버 주소와 Firebase OAuth가 미설정이므로 구매가 비활성화됩니다.
 
 ### 명시적인 업로드 서명과 내부 테스트 AAB
 
@@ -54,7 +54,7 @@ GitHub Actions의 기존 Android 워크플로에 수동 실행용 `artifact_type
 
 base64는 암호화가 아니므로 키와 동일하게 비공개로 취급합니다. CI는 runner 임시 경로에 키를 복원하고, 원본 70개 음원·AAB 서명·업로드 인증서 일치 여부를 확인한 뒤 AAB와 체크섬만 산출물로 보관합니다. 키와 비밀번호는 산출물에 포함하지 않으며 작업 종료 시 임시 키와 properties 파일을 삭제합니다.
 
-워크플로 입력 `version_code`는 Play의 이전 업로드보다 큰 정수로 지정합니다(제안 기본값 95, 이전 업로드 값은 미확인). Actions 화면에 새 수동 입력이 보이지 않으면 해당 워크플로 변경을 기본 브랜치에 반영해야 합니다.
+워크플로 입력 `version_code`는 Play의 이전 업로드보다 큰 정수로 지정합니다. 첫 업로드는 95였고 다음 기본값은 96입니다. 그 이후 업로드가 있다면 더 큰 값을 사용합니다. Actions 화면에 새 수동 입력이 보이지 않으면 해당 워크플로 변경을 기본 브랜치에 반영해야 합니다.
 
 이 수동 AAB는 **결제 라이브러리와 패키지를 먼저 등록하기 위한 내부 테스트용 결제 준비 빌드**입니다. 상품·서버 주소·인증 세션을 미설정 상태로 두므로 구매가 비활성화되어 있습니다. 이 번들로 실제 결제 테스트를 완료했다고 안내하지 않습니다. 운영 결제용 빌드는 아래 서버·로그인 구현 이후 별도로 준비합니다.
 
@@ -66,12 +66,12 @@ base64는 암호화가 아니므로 키와 동일하게 비공개로 취급합�
 
 ## 2. 인증·구매 검증 서버
 
-**이 저장소의 클라이언트·API 계약만으로 서버가 배포되지는 않습니다.** 서버 운영 환경, 영구 데이터베이스, 로그인 및 세션 발급을 별도로 구현·연결해야 합니다. 앱의 기본 세션 토큰 공급자는 미설정 상태입니다. 서버 주소를 지정해도 인증된 세션 공급자가 연결되지 않으면 구매는 비활성 상태로 남습니다.
+**이 저장소의 코드만으로 서버가 배포되지는 않습니다.** Firebase Google 로그인과 계정별 구매 권한 분리, Worker HTTP 서버와 D1 원장 코드를 준비했습니다. Google 제공업체·Play 앱 서명 SHA-1·공개 Firebase 설정 파일, 서버 계정 권한·비공개 런타임 설정·D1 배포와 HTTPS 주소 연결은 아직 필요합니다. 기본 서버 주소는 비어 있으며 실제 구매는 비활성 상태입니다. [Firebase 연결](FIREBASE_CONNECT.md)과 [서버 구성](../server/README.md)을 참고합니다.
 
-`server/src/play_purchase.mjs`에 공식 Android Publisher `ProductPurchaseV2` 응답 검사 모듈을 추가했습니다. 등록한 상품·구매 옵션, 준비된 계정/요청 식별자, 결제 완료 상태, 수량·환불 가능 수량과 소비 상태를 검사하며 14개 테스트를 통과했습니다. `cd server && npm test`로 실행합니다. 이 모듈은 HTTP 서버·인증·거래 원장·배포를 대신하지 않으며 아직 실제 구매 토큰으로 운영 검증한 상태는 아닙니다. Google/Firebase 프로젝트와 서버 운영 방식은 소유자의 답변을 기다리고 있습니다.
+`server/src/play_purchase.mjs`는 공식 `ProductPurchaseV2` 응답의 상품·구매 옵션, 준비된 계정/요청 식별자, 결제 완료 상태와 수량·환불·소비 상태를 검사합니다. `google_clients.mjs`는 Firebase 토큰과 서버 전용 Google 인증을 처리하고, `worker.mjs`·`ledger.mjs`는 HTTP 경로·영구 원장·환불 반영을 구현합니다. Node24에서 `cd server && npm ci --ignore-scripts && npm test`로 검사합니다. 실제 Google 자격증명·구매 토큰으로 운영 검증한 상태는 아닙니다.
 
 - 모든 요청은 인증서 검증을 사용하는 HTTPS로 전송하고, `Authorization: Bearer <access-token>`을 사용합니다. 토큰은 로그인한 사용자의 런타임 세션 공급자가 발급·갱신해야 합니다. 공용 토큰을 `--dart-define`으로 앱에 넣는 방식은 사용하지 않습니다.
-- `BillingSessionProvider`를 실제 로그인 모듈에 연결해야 합니다. 현재 `MissingBillingSession` 기본 구현은 구매를 차단합니다. 로그아웃·계정 전환 시에는 이전 사용자의 네이티브 권한 캐시와 화면 권한을 초기화하고 새 계정의 원장을 조회해야 합니다.
+- `BillingSessionProvider`는 Firebase Google 로그인 모듈에 연결했습니다. OAuth 설정이 없으면 `MissingBillingSession`이 구매를 차단합니다. 로그아웃·계정 전환 시 네이티브와 화면의 이전 권한을 초기화하고 늦게 도착한 이전 계정의 응답을 거부합니다.
 - 서버가 Google Play Developer API로 패키지·상품·구매 토큰과 구매 완료 상태를 검증합니다. 대기 중·취소·환불된 거래에는 권한을 발급하지 않습니다. 상품과 패키지는 서버의 허용 목록과 대조합니다.
 - 서비스 계정 자격증명은 서버의 보안 설정에만 둡니다. APK, JavaScript, 저장소에 포함하지 않습니다. Play Console에서 서버 계정에 해당 앱의 구매 검증에 필요한 권한을 부여해야 합니다.
 - 구매 토큰을 거래 원장의 고유 키로 저장하고 사용자·요청·풀이·상품에 묶습니다. 같은 거래를 재전송해도 기존 권한을 반환하며, 다른 사용자나 다른 풀이에 다시 지급하지 않습니다.
@@ -85,7 +85,7 @@ base64는 암호화가 아니므로 키와 동일하게 비공개로 취급합�
 
 ### `GET /v1/billing/entitlements`
 
-인증 사용자의 구매 권한을 조회합니다. 소비된 거래도 서버 원장에서 조회합니다. 다른 사용자의 권한을 반환하지 않아야 합니다. 응답은 `{"entitlements": [권한 객체]}`이며, 구매가 없으면 `{"entitlements": []}`입니다.
+인증 사용자의 구매 권한을 페이지별로 조회합니다. 소비된 거래도 서버 원장에서 조회합니다. 응답은 `{"entitlements": [권한 객체], "revision": 1, "nextCursor": null}` 형태입니다. 다음 페이지가 있으면 `nextCursor`를 `?cursor=...`로 전달하고, 마지막 페이지는 `null`입니다. 한 응답은 최대 7건이며 요청한 수보다 적을 수 있습니다. 클라이언트는 모든 페이지를 모아 권한을 교체합니다. 중간에 원장이 바뀌면 서버는 HTTP409 `ledger_changed`를 반환하고 클라이언트는 전체 조회를 최대 세 번 다시 시작합니다. 다른 사용자의 커서, 위조된 커서, 중복 거래와 페이지 반복을 허용하지 않습니다.
 
 ### `POST /v1/billing/prepare`
 
