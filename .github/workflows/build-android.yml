@@ -15,12 +15,29 @@ on:
       version_code:
         description: Internal AAB version code, greater than any previous Play upload
         type: string
-        default: '95'
+        default: '96'
 
 permissions:
   contents: read
 
 jobs:
+  billing-server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci --ignore-scripts --no-fund
+      - name: Verify billing backend
+        run: npm test
+
   android-debug-apk:
     if: github.event_name != 'workflow_dispatch' || inputs.artifact_type != 'internal_aab'
     runs-on: ubuntu-latest

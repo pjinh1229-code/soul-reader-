@@ -14,3 +14,12 @@ backup-recipient-private.pem
 backup-decryption-password.txt
 SOUL_READER_BACKUP_PASSWORD.txt
 signing.json
+/server/node_modules/
+/server/.wrangler/
+/server/dist/
+/server/.dev.vars
+/server/.dev.vars.*
+!/server/.dev.vars.example
+/server/.env
+/server/.env.*
+!/server/.env.example

@@ -288,6 +288,9 @@ class BillingController {
   final Map<String, VerifiedGrant> _deliveredTransactions = {};
   final Set<String> _completed = {};
   final Set<String> _storePending = {};
+  // An owned Play item may belong to another app account. Keep it unresolved
+  // until authoritative recovery says it is gone or this account verifies it.
+  final Set<String> _unresolvedOwned = {};
   final Completer<void> _journalReady = Completer<void>();
   StreamSubscription<List<StorePurchase>>? _subscription;
   Future<void>? _initialization;
@@ -297,6 +300,7 @@ class BillingController {
   bool _launching = false;
   bool _restoring = false;
   bool _refreshing = false;
+  String? _awaitingStoreProduct;
   int _processing = 0;
   String _status = 'initializing';
   String? _errorCode;
@@ -304,6 +308,8 @@ class BillingController {
   bool get isConfigured => config.isConfigured && verifier.isConfigured;
   bool get _busy =>
       _launching || _restoring || _refreshing || _processing > 0;
+
+  bool get canChangeAccount => !_busy && _awaitingStoreProduct == null && _storePending.isEmpty;
 
   bool canBuy(String offerKey) {
     final offer = config.offerForKey(offerKey);
@@ -313,6 +319,7 @@ class BillingController {
         !_busy &&
         _contexts.isEmpty &&
         _storePending.isEmpty &&
+        _unresolvedOwned.isEmpty &&
         offer != null &&
         _products.containsKey(offer.productId);
   }
@@ -438,13 +445,17 @@ class BillingController {
       }
       if (_disposed) return false;
       await journal.put(context);
+      if (_disposed) return false;
       _contexts[offer.productId] = context;
+      _awaitingStoreProduct = offer.productId;
       final launched = await store.buy(
         productId: offer.productId,
         consumable: offer.consumable,
         context: context,
       );
+      if (_disposed) return false;
       if (!launched) {
+        _awaitingStoreProduct = null;
         await journal.remove(offer.productId);
         _contexts.remove(offer.productId);
         _setStatus('canceled');
@@ -513,7 +524,15 @@ class BillingController {
 
   Future<void> _recoverStore() async {
     final purchases = await store.recoverPurchases();
-    final owned = purchases.map((purchase) => purchase.productId).toSet();
+    if (_disposed) return;
+    _awaitingStoreProduct = null;
+    final owned = purchases.where((purchase) =>
+        purchase.state == StorePurchaseState.pending ||
+        purchase.state == StorePurchaseState.purchased ||
+        purchase.state == StorePurchaseState.restored)
+        .map((purchase) => purchase.productId).toSet();
+    _unresolvedOwned.removeWhere((productId) => !owned.contains(productId));
+    _storePending.removeWhere((productId) => !owned.contains(productId));
     for (final productId in _contexts.keys.toList(growable: false)) {
       if (!owned.contains(productId)) {
         await journal.remove(productId);
@@ -547,6 +566,12 @@ class BillingController {
       _setError('unknown_product');
       return;
     }
+    final key = '${purchase.productId}\u0000${purchase.purchaseId}\u0000'
+        '${purchase.verificationData}';
+    final settled = purchase.state == StorePurchaseState.purchased ||
+        purchase.state == StorePurchaseState.restored;
+    if (settled && _completed.contains(key)) return;
+    if (_awaitingStoreProduct == purchase.productId) _awaitingStoreProduct = null;
     if (purchase.state == StorePurchaseState.pending) {
       _storePending.add(purchase.productId);
       _setStatus('pending');
@@ -554,6 +579,10 @@ class BillingController {
     }
     _storePending.remove(purchase.productId);
     if (purchase.state == StorePurchaseState.canceled) {
+      if (_unresolvedOwned.contains(purchase.productId)) {
+        _setReady();
+        return;
+      }
       await journal.remove(purchase.productId);
       _contexts.remove(purchase.productId);
       _setStatus('canceled');
@@ -563,13 +592,11 @@ class BillingController {
       _setError('store_purchase_failed');
       return;
     }
+    _unresolvedOwned.add(purchase.productId);
     if (purchase.verificationData.isEmpty) {
       _setError('receipt_missing');
       return;
     }
-    final key = '${purchase.productId}\u0000${purchase.purchaseId}\u0000'
-        '${purchase.verificationData}';
-    if (_completed.contains(key)) return;
     _processing++;
     _setStatus('verifying');
     var phase = 'verification';
@@ -598,7 +625,9 @@ class BillingController {
       } else if (purchase.pendingCompletion) {
         await store.complete(purchase);
       }
+      if (_disposed) return;
       _completed.add(key);
+      _unresolvedOwned.remove(purchase.productId);
       await journal.remove(purchase.productId);
       _contexts.remove(purchase.productId);
       _setReady();
@@ -647,8 +676,12 @@ class BillingController {
       _setStatus('store_unavailable');
     } else if (_storePending.isNotEmpty) {
       _setStatus('pending');
-    } else if (_contexts.isNotEmpty) {
-      _setStatus('recovery_required');
+    } else if (_contexts.isNotEmpty || _unresolvedOwned.isNotEmpty) {
+      _status = 'recovery_required';
+      if (_unresolvedOwned.isNotEmpty && _contexts.isEmpty) {
+        _errorCode ??= 'owned_purchase_needs_account';
+      }
+      _emit();
     } else {
       _setStatus(_products.isEmpty ? 'products_unavailable' : 'ready');
     }

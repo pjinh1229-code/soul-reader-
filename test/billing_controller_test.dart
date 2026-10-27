@@ -23,10 +23,14 @@ const grant = VerifiedGrant(
 
 class FakeJournal implements PendingPurchaseJournal {
   final Map<String, PurchaseContext> entries = {};
+  Completer<void>? putWait;
+  Completer<void>? putStarted;
   @override
   Future<List<PurchaseContext>> load() async => entries.values.toList();
   @override
   Future<void> put(PurchaseContext context) async {
+    putStarted?.complete();
+    await putWait?.future;
     entries[context.productId] = context;
   }
   @override
@@ -103,6 +107,8 @@ class FakeVerifier implements PurchaseVerifier {
   bool configured = true;
   bool reject = false;
   bool wrongPreparedContext = false;
+  Completer<VerifiedGrant>? verifyWait;
+  Completer<void>? verifyStarted;
   int verifyCount = 0;
   int prepareCount = 0;
   VerifiedGrant verified = grant;
@@ -130,7 +136,8 @@ class FakeVerifier implements PurchaseVerifier {
     verifyCount++;
     lastVerification = request;
     if (reject) throw const BillingFailure('receipt_invalid');
-    return verified;
+    verifyStarted?.complete();
+    return verifyWait == null ? verified : await verifyWait!.future;
   }
   @override
   Future<List<VerifiedGrant>> restoreEntitlements() async {
@@ -450,4 +457,77 @@ void main() {
     expect(store.consumeCount, 0);
     expect(store.completeCount, 0);
   });
+
+  test('account change stays blocked while waiting for the store outcome', () async {
+    await buy();
+    expect(controller.snapshot['busy'], isFalse);
+    expect(controller.canChangeAccount, isFalse);
+    store.emit(const StorePurchase(productId: 'soul_single',
+      state: StorePurchaseState.canceled));
+    await controller.flush();
+    expect(controller.canChangeAccount, isTrue);
+  });
+
+  test('owned receipt from another account blocks rebuy without a local intent', () async {
+    verifier.reject = true;
+    store.owned = [receipt];
+    await controller.initialize();
+    expect(controller.snapshot['status'], 'recovery_required');
+    expect(controller.snapshot['errorCode'], 'receipt_invalid');
+    expect(controller.canBuy('single'), isFalse);
+    expect(controller.canBuy('bundle'), isFalse);
+    expect(controller.canChangeAccount, isTrue);
+    expect(journal.entries, isEmpty);
+    expect(store.consumeCount, 0);
+    // Only a fresh successful Play ownership query can clear the block.
+    store.owned = [];
+    await controller.restore();
+    expect(controller.canBuy('single'), isTrue);
+  });
+
+  test('late cancellation preserves an unresolved verified receipt context', () async {
+    verifier.reject = true;
+    await buy();
+    store.emit(receipt);
+    await controller.flush();
+    store.emit(const StorePurchase(productId: 'soul_single',
+      state: StorePurchaseState.canceled));
+    await controller.flush();
+    expect(journal.entries['soul_single']!.requestId, 'request-1');
+    expect(controller.canBuy('single'), isFalse);
+    expect(controller.snapshot['status'], 'recovery_required');
+    expect(controller.canChangeAccount, isTrue);
+    expect(store.consumeCount, 0);
+    store.owned = [];
+    await controller.restore();
+    expect(journal.entries, isEmpty);
+    expect(controller.canBuy('single'), isTrue);
+  });
+
+  test('disposal during durable intent write never launches the old store checkout', () async {
+    journal.putWait = Completer<void>();
+    journal.putStarted = Completer<void>();
+    final buying = controller.buy('single', requestId: 'request-1', readingId: 'reading-1');
+    await journal.putStarted!.future;
+    await controller.dispose();
+    journal.putWait!.complete();
+    expect(await buying, isFalse);
+    expect(store.buyCount, 0);
+    expect(journal.entries['soul_single']!.readingId, 'reading-1');
+  });
+
+  test('disposal during verification cannot deliver or consume the old receipt', () async {
+    await buy();
+    verifier.verifyWait = Completer<VerifiedGrant>();
+    verifier.verifyStarted = Completer<void>();
+    store.emit(receipt);
+    await verifier.verifyStarted!.future;
+    await controller.dispose();
+    verifier.verifyWait!.complete(grant);
+    await controller.flush();
+    expect(delivered, isEmpty);
+    expect(store.consumeCount, 0);
+    expect(journal.entries, isNotEmpty);
+  });
+
 }

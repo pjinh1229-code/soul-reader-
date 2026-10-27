@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -11,12 +12,19 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import 'face_measure.dart';
+import 'billing/account_billing_lifecycle.dart';
+import 'billing/auth_session.dart';
 import 'billing/billing_controller.dart';
+import 'billing/firebase_session.dart';
 import 'billing/http_purchase_verifier.dart';
 import 'billing/pending_journal.dart';
 import 'billing/play_store_gateway.dart';
 
-void main() => runApp(const SoulReaderApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final session = await createConfiguredFirebaseBillingSession();
+  runApp(SoulReaderApp(billingSession: session));
+}
 
 class SoulReaderApp extends StatelessWidget {
   const SoulReaderApp({super.key, this.billingSession = const MissingBillingSession()});
@@ -44,6 +52,9 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
   bool _consented = false;
   bool _busy = false;
   String? _message;
+  late final AccountBillingLifecycle _accountBilling;
+  int _billingEpoch = 0;
+  final Map<String, FilePendingPurchaseJournal> _accountJournals = {};
   BillingController? _billing;
   HttpPurchaseVerifier? _purchaseVerifier;
   Future<void>? _billingInitialization;
@@ -87,40 +98,77 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
           _webPageReady = true;
           final pending = List<Map<String, dynamic>>.from(_billingOutbox);
           _billingOutbox.clear();
+          // Auth may have been coalesced after grants while the page loaded.
+          // Negotiate current identity first, then replay this epoch only.
+          _accountBilling.emitAuth();
           for (final payload in pending) {
-            await _emitBilling(payload);
+            if (payload['type'] != 'auth') await _emitBilling(payload);
           }
           await _emitBilling({'type': 'state', ..._billingState});
         },
       ));
-    _billingInitialization = _initializeBilling();
+    _accountBilling = AccountBillingLifecycle(
+      session: widget.billingSession,
+      onAuth: (payload) {
+        _billingEpoch = payload['epoch'] as int;
+        unawaited(_emitBilling(payload));
+      },
+      onAccountChanged: _onBillingAccountChanged,
+    );
+    _accountBilling.start();
     _loadWebContent();
     // Recover a camera/gallery result on Android after a process restart.
     _restoreLostImage();
   }
 
-  Future<void> _initializeBilling() async {
+  void _onBillingAccountChanged(AccountBillingScope scope) {
+    final previous = _billing;
+    _billing = null;
+    _purchaseVerifier = null;
+    if (previous != null) unawaited(previous.dispose());
+    _grants.clear();
+    _billingOutbox.removeWhere((payload) => payload['epoch'] != scope.epoch);
+    _billingState = {'status': 'unconfigured', 'configured': false,
+      'storeAvailable': false, 'busy': false, 'products': <Object>[]};
+    unawaited(_emitBilling({'type': 'accountReset'}, epoch: scope.epoch));
+    _billingInitialization = _initializeBilling(scope);
+  }
+
+  Future<void> _initializeBilling(AccountBillingScope scope) async {
     try {
+      if (scope.identity == null) {
+        await _emitBilling({'type': 'state', ..._billingState}, epoch: scope.epoch);
+        return;
+      }
       final directory = await getApplicationSupportDirectory();
-      if (!mounted) return;
+      if (!mounted || !scope.isCurrent) return;
       final config = BillingConfig(offers: const [
-        BillingOffer(key: 'single', productId: String.fromEnvironment('BILLING_SINGLE_PRODUCT')),
-        BillingOffer(key: 'bundle', productId: String.fromEnvironment('BILLING_BUNDLE_PRODUCT')),
+        BillingOffer(key: 'single', productId: String.fromEnvironment(
+          'BILLING_SINGLE_PRODUCT', defaultValue: 'soul_reading_single')),
+        BillingOffer(key: 'bundle', productId: String.fromEnvironment(
+          'BILLING_BUNDLE_PRODUCT', defaultValue: 'soul_reading_bundle')),
       ]);
       final verifier = HttpPurchaseVerifier(
         baseUrl: const String.fromEnvironment('BILLING_VERIFIER_URL'),
         packageName: const String.fromEnvironment('BILLING_PACKAGE_NAME',
           defaultValue: 'com.soulreader.soul_reader'),
         config: config,
-        session: widget.billingSession,
+        session: scope.guardSession(widget.billingSession),
       );
       _purchaseVerifier = verifier;
-      _billing = BillingController(
+      // Hashing prevents a UID from entering filenames. Reusing each journal
+      // preserves its write queue across A -> B -> A account switches.
+      final accountHash = sha256.convert(utf8.encode(scope.identity!.key));
+      final path = '${directory.path}/billing_pending_$accountHash.json';
+      final journal = _accountJournals.putIfAbsent(path,
+          () => FilePendingPurchaseJournal(File(path)));
+      final controller = BillingController(
         config: config,
-        store: PlayStoreGateway(),
-        verifier: verifier,
-        journal: FilePendingPurchaseJournal(File('${directory.path}/billing_pending.json')),
+        store: scope.guardStore(PlayStoreGateway()),
+        verifier: scope.guardVerifier(verifier),
+        journal: scope.guardJournal(journal),
         onState: (snapshot) {
+          if (!mounted || !scope.isCurrent) return;
           final status = switch (snapshot['status']) {
             'configuration_required' => 'unconfigured',
             'initializing' => 'loading',
@@ -128,79 +176,106 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
             final other => other,
           };
           _billingState = {...snapshot, 'status': status};
-          unawaited(_emitBilling({'type': 'state', ..._billingState}));
+          unawaited(_emitBilling({'type': 'state', ..._billingState}, epoch: scope.epoch));
         },
         onEntitlements: (grants) async {
+          scope.ensureCurrent();
           _grants
             ..clear()
             ..addEntries(grants.map((grant) => MapEntry(grant.entitlementId, grant)));
           await _emitBilling({'type': 'entitlements',
-            'entitlements': grants.map((grant) => grant.toJson()).toList()});
+            'entitlements': grants.map((grant) => grant.toJson()).toList()}, epoch: scope.epoch);
+          scope.ensureCurrent();
         },
         onGrant: (grant) async {
+          scope.ensureCurrent();
           _grants[grant.entitlementId] = grant;
-          await _emitBilling({'type': 'grant', 'entitlement': grant.toJson()});
+          await _emitBilling({'type': 'grant', 'entitlement': grant.toJson()}, epoch: scope.epoch);
+          scope.ensureCurrent();
         },
       );
-      await _billing!.initialize();
-      if (_billing!.isConfigured) {
-        await _billing!.restore();
-      } else {
-        await _emitBilling({'type': 'entitlements', 'entitlements': <Object>[]});
-      }
+      _billing = controller;
+      await controller.initialize();
+      if (!scope.isCurrent || !mounted) return;
+      if (controller.isConfigured) await controller.restore();
     } catch (_) {
+      if (!scope.isCurrent || !mounted) return;
       _billingState = {'status': 'error', 'configured': false,
         'storeAvailable': false, 'busy': false, 'products': <Object>[],
         'errorCode': 'billing_initialization_failed'};
-      await _emitBilling({'type': 'state', ..._billingState});
+      await _emitBilling({'type': 'state', ..._billingState}, epoch: scope.epoch);
     }
   }
 
-  Future<void> _emitBilling(Map<String, dynamic> payload) {
-    if (!mounted) return Future<void>.value();
+  Future<void> _emitBilling(Map<String, dynamic> payload, {int? epoch}) {
+    final expectedEpoch = epoch ?? (payload['epoch'] as int?) ?? _billingEpoch;
+    if (!mounted || expectedEpoch != _billingEpoch) return Future<void>.value();
+    final tagged = {...payload, 'epoch': expectedEpoch};
     if (!_webPageReady) {
-      if (payload['type'] == 'state') {
-        _billingOutbox.removeWhere((value) => value['type'] == 'state');
+      if (payload['type'] == 'state' || payload['type'] == 'auth') {
+        _billingOutbox.removeWhere((value) => value['type'] == payload['type']);
       }
-      _billingOutbox.add(payload);
+      _billingOutbox.add(tagged);
       return Future<void>.value();
     }
     final next = _billingJsQueue.then((_) async {
-      if (!mounted) return;
+      if (!mounted || expectedEpoch != _billingEpoch) return;
       await _web.runJavaScript(
-        'if(window.soulBillingReceive)window.soulBillingReceive(${jsonEncode(payload)});');
+        'if(window.soulBillingReceive)window.soulBillingReceive(${jsonEncode(tagged)});');
     });
     _billingJsQueue = next.catchError((Object _) {});
     return _billingJsQueue;
   }
 
   void _onBillingMessage(JavaScriptMessage message) {
-    // A late ledger refresh must finish before a topic selection can update
-    // the same entitlement. Keep all bridge commands in their arrival order.
+    final receivedEpoch = _billingEpoch;
     _billingCommandQueue = _billingCommandQueue
-        .then((_) => _handleBillingMessage(message))
+        .then((_) => _handleBillingMessage(message, receivedEpoch))
         .catchError((Object _) {});
   }
 
-  Future<void> _handleBillingMessage(JavaScriptMessage message) async {
+  Future<void> _handleBillingMessage(JavaScriptMessage message, int receivedEpoch) async {
     String? requestId;
+    final commandEpoch = receivedEpoch;
     try {
       if (message.message.length > 4096) throw const BillingFailure('invalid_request');
       final request = jsonDecode(message.message) as Map<String, dynamic>;
       requestId = request['requestId'] as String?;
+      if (commandEpoch != _billingEpoch ||
+          (request['epoch'] != null && request['epoch'] != _billingEpoch)) return;
+      if (request['action'] == 'signIn' || request['action'] == 'signOut') {
+        if (_billing?.canChangeAccount == false) {
+          throw const BillingFailure('purchase_busy');
+        }
+        if (request['action'] == 'signIn') {
+          await _accountBilling.signIn();
+        } else {
+          await _accountBilling.signOut();
+        }
+        return;
+      }
+      if (request['action'] == 'status') {
+        _accountBilling.emitAuth();
+      }
       await _billingInitialization;
-      if (!mounted) return;
+      if (!mounted || commandEpoch != _billingEpoch) return;
+      final scope = _accountBilling.scope;
       final controller = _billing;
+      if (request['action'] == 'status' && controller == null) {
+        await _emitBilling({'type': 'state', ..._billingState});
+        return;
+      }
+      if (scope?.identity == null) throw const BillingFailure('authentication_required');
       if (controller == null) throw const BillingFailure('configuration_required');
       switch (request['action']) {
         case 'status':
-          if (controller.isConfigured && controller.snapshot['busy'] != true) {
+          if (controller.isConfigured && controller.canChangeAccount) {
             await controller.restore();
           }
-          await _emitBilling({'type': 'state', ..._billingState});
-          if (controller.snapshot['busy'] != true) {
+          await _emitBilling({'type': 'state', ..._billingState}, epoch: commandEpoch);
+          if (controller.canChangeAccount) {
             await _emitBilling({'type': 'entitlements',
-              'entitlements': _grants.values.map((grant) => grant.toJson()).toList()});
+              'entitlements': _grants.values.map((grant) => grant.toJson()).toList()}, epoch: commandEpoch);
           }
           break;
         case 'buy':
@@ -218,20 +293,22 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
           final id = request['entitlementId'];
           final topic = request['topic'];
           final grant = _grants[id];
-          if (grant == null || topic is! String ||
-              request['readingId'] != grant.readingId) {
+          if (grant == null || topic is! String || request['readingId'] != grant.readingId) {
             throw const BillingFailure('invalid_entitlement');
           }
-          final selected = await _purchaseVerifier!.selectTopic(grant, topic);
+          final selected = await scope!.guard(() => _purchaseVerifier!.selectTopic(grant, topic));
           _grants[selected.entitlementId] = selected;
-          await _emitBilling({'type': 'grant', 'entitlement': selected.toJson()});
+          await _emitBilling({'type': 'grant', 'entitlement': selected.toJson()}, epoch: commandEpoch);
           break;
         default:
           throw const BillingFailure('invalid_request');
       }
     } catch (error) {
+      // Auth can advance the epoch before reporting a safe picker error.
+      final authError = error is BillingAuthFailure;
       await _emitBilling({'type': 'error', 'requestId': requestId,
-        'code': error is BillingFailure ? error.code : 'billing_request_failed'});
+        'code': error is BillingAuthFailure ? error.code : error is BillingFailure ? error.code : 'billing_request_failed'},
+        epoch: authError ? _billingEpoch : commandEpoch);
     }
   }
 
@@ -341,6 +418,7 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
   void dispose() {
     final billing = _billing;
     if (billing != null) unawaited(billing.dispose());
+    unawaited(_accountBilling.dispose());
     FaceMeasure.close();
     super.dispose();
   }
