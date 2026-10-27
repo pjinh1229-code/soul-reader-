@@ -214,8 +214,12 @@ test('ACK outage preserves the grant/job and scheduled retry does not depend on 
   assert.equal((await s.ledger.purchase(await tokenHash(token))).ack_pending, 1);
   s.setAckError(null);
   s.setVoidedError(new GoogleClientFailure('play_unavailable', { status: 503, retryable: true }));
-  await assert.rejects(s.worker.scheduled({}, s.env), error => error.code === 'billing_unavailable');
+  const beforeSync = await s.ledger.syncState();
+  await assert.rejects(s.worker.scheduled({}, s.env), error => error.code === 'refund_sync_failed' && error.status === 503);
   assert.equal((await s.ledger.purchase(await tokenHash(token))).ack_pending, 0);
+  const afterSync = await s.ledger.syncState();
+  assert.equal(afterSync.watermark_ms, beforeSync.watermark_ms);
+  assert.equal(afterSync.last_completed_ms, beforeSync.last_completed_ms);
 });
 
 test('cancel/refund tombstone permanently removes access and stale purchased replay cannot reactivate', async t => {

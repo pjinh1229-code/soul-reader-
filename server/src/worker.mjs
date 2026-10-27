@@ -273,7 +273,7 @@ export function createBillingWorker({ clock = Date.now, authenticateFactory, pub
       }
     }
     await rt.ledger.cleanRateLimits();
-    if (refundFailed) fail('billing_unavailable', 503);
+    if (refundFailed) fail('refund_sync_failed', 503);
   }
   return { fetch, scheduled };
 }
