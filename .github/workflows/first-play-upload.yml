@@ -1,0 +1,182 @@
+name: First SOUL READER Play AAB with encrypted owner-key backup
+
+on:
+  push:
+    branches: [build/first-play-upload-20261027]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soul-first-play-upload-20261027
+  cancel-in-progress: false
+
+jobs:
+  first-play-upload:
+    # One branch-creation run only. Never regenerate a key on a rerun or later push.
+    if: github.event.created == true && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SOUL_BOOTSTRAP_PRIVATE_DIR: ${{ runner.temp }}/soul-owner-upload-key-${{ github.run_id }}
+      SOUL_BOOTSTRAP_RECIPIENT_CERT: ${{ github.workspace }}/release/first-upload/backup-recipient.pem
+      SOUL_BOOTSTRAP_BACKUP_PATH: ${{ runner.temp }}/SOUL_READER_UPLOAD_KEY_ENCRYPTED_BACKUP.cms
+    steps:
+      - name: Checkout reviewed application and public recipient certificate
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Test signing, backup encryption and artifact verification
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Check pinned public backup-recipient certificate
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, subprocess
+          certificate = subprocess.run(['openssl', 'x509', '-in', os.environ['SOUL_BOOTSTRAP_RECIPIENT_CERT'],
+                                        '-outform', 'DER'], capture_output=True, check=True).stdout
+          expected = '91708a57357c9eeac765cb01ba1c75a9c1d2ba04731e5b39b4a083136446a5e1'
+          if hashlib.sha256(certificate).hexdigest() != expected:
+              raise SystemExit('Unexpected backup-recipient certificate')
+          print('Pinned public recipient verified; private decryption key is not in CI.')
+          PY
+      - name: Setup Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate owner upload key and authenticated encrypted backup once
+        run: |
+          set -euo pipefail
+          python3 scripts/first_upload_bootstrap.py
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          private = Path(os.environ['SOUL_BOOTSTRAP_PRIVATE_DIR'])
+          signing = json.loads((private / 'signing.json').read_text())
+          for field in ['SOUL_UPLOAD_KEYSTORE_PASSWORD', 'SOUL_UPLOAD_KEY_PASSWORD']:
+              print('::add-mask::' + signing[field])
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              for name, value in signing.items():
+                  if not name.startswith('SOUL_UPLOAD_') or any(c in value for c in '\r\n\0'):
+                      raise SystemExit('Invalid generated signing setting')
+                  output.write(name + '=' + value + '\n')
+          PY
+      - name: Preserve encrypted owner backup before starting the app build
+        id: encrypted_backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: SOUL_READER_UPLOAD_KEY_ENCRYPTED_BACKUP_FIRST_20261027
+          path: ${{ runner.temp }}/SOUL_READER_UPLOAD_KEY_ENCRYPTED_BACKUP.cms
+          if-no-files-found: error
+          retention-days: 90
+      - name: Record public ciphertext recovery copy and upload certificate identity
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, json, os, textwrap
+          from pathlib import Path
+          private = Path(os.environ['SOUL_BOOTSTRAP_PRIVATE_DIR'])
+          metadata = json.loads((private / 'metadata.json').read_text())
+          encrypted = Path(os.environ['SOUL_BOOTSTRAP_BACKUP_PATH']).read_bytes()
+          # Public recovery copies contain ciphertext only, never a key or password.
+          encoded = base64.b64encode(encrypted).decode()
+          chunks = textwrap.wrap(encoded, 2048)
+          if len(chunks) > 8:
+              raise SystemExit('Encrypted recovery copy exceeds the guarded annotation limit')
+          for index, chunk in enumerate(chunks, 1):
+              print(f'::notice title=SOUL_ENCRYPTED_BACKUP_CHUNK_{index:02d}_OF_{len(chunks):02d}::{chunk}')
+          print('::notice title=SOUL_ENCRYPTED_BACKUP_SHA256::' + hashlib.sha256(encrypted).hexdigest())
+          print('::notice title=SOUL_UPLOAD_CERTIFICATE_SHA256::' + metadata['certificateSha256'])
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write('## First-upload key backup\n\n')
+              output.write('Only authenticated, public-key-encrypted ciphertext is below. The private decryption key and its password never enter CI.\n\n')
+              output.write('Upload certificate SHA-256: `' + metadata['certificateSha256'] + '`\n\n')
+              output.write('Encrypted backup SHA-256: `' + hashlib.sha256(encrypted).hexdigest() + '`\n\n')
+              output.write('<details><summary>Encrypted backup recovery copy</summary>\n\n```text\n')
+              output.write('SOUL_UPLOAD_BACKUP_BASE64_BEGIN\n')
+              output.write('\n'.join(textwrap.wrap(encoded, 76)))
+              output.write('\nSOUL_UPLOAD_BACKUP_BASE64_END\n```\n</details>\n')
+          print('Encrypted backup preserved before building; public certificate identity recorded.')
+          PY
+      - name: Generate Android and configure owner upload signing
+        run: |
+          set -euo pipefail
+          bash scripts/prepare_android.sh
+          python3 scripts/configure_release_signing.py
+          python3 scripts/verify_assets.py
+      - name: Analyze and test the native app
+        run: |
+          set -euo pipefail
+          flutter analyze --no-fatal-infos
+          flutter test
+      - name: Build first-upload payment-preparation AAB
+        run: |
+          set -euo pipefail
+          # Authentication/verifier remain unconfigured. This build cannot charge users.
+          set +e
+          flutter build appbundle --release --build-number=95 \
+            --dart-define=BILLING_PACKAGE_NAME=com.soulreader.soul_reader > "$RUNNER_TEMP/first-play-build.log" 2>&1
+          build_status=$?
+          set -e
+          cat "$RUNNER_TEMP/first-play-build.log"
+          if [ "$build_status" -ne 0 ]; then
+            tail -n 80 "$RUNNER_TEMP/first-play-build.log" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$build_status"
+      - name: Download and verify official bundletool
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 2 --proto '=https' --tlsv1.2 \
+            https://github.com/google/bundletool/releases/download/1.18.2/bundletool-all-1.18.2.jar \
+            --output "$RUNNER_TEMP/bundletool-all-1.18.2.jar"
+          printf '%s  %s\n' '378b5434cd1378bef6b2bc527b8c7f0ff2584b273830335bce54d6d0813c8584' \
+            "$RUNNER_TEMP/bundletool-all-1.18.2.jar" | sha256sum --check -
+      - name: Verify actual bundle, billing permission, owner certificate and original audio
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/soul-play-delivery"
+          python3 scripts/verify_first_play_bundle.py \
+            --bundle build/app/outputs/bundle/release/app-release.aab \
+            --bundletool "$RUNNER_TEMP/bundletool-all-1.18.2.jar" \
+            --certificate "$SOUL_BOOTSTRAP_PRIVATE_DIR/upload-certificate.pem" \
+            --output "$RUNNER_TEMP/soul-play-delivery/BUILD_INFO.json"
+      - name: Stage AAB and encrypted backup only
+        run: |
+          set -euo pipefail
+          delivery="$RUNNER_TEMP/soul-play-delivery"
+          cp build/app/outputs/bundle/release/app-release.aab "$delivery/SOUL_READER_8.5.6_FIRST_PLAY_UPLOAD.aab"
+          cp "$SOUL_BOOTSTRAP_BACKUP_PATH" "$delivery/SOUL_READER_UPLOAD_KEY_ENCRYPTED_BACKUP.cms"
+          cp "$SOUL_BOOTSTRAP_PRIVATE_DIR/upload-certificate.pem" "$delivery/upload-certificate.pem"
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          delivery = Path(os.environ['RUNNER_TEMP']) / 'soul-play-delivery'
+          for name in ['SOUL_READER_8.5.6_FIRST_PLAY_UPLOAD.aab', 'SOUL_READER_UPLOAD_KEY_ENCRYPTED_BACKUP.cms']:
+              digest = hashlib.sha256((delivery / name).read_bytes()).hexdigest()
+              (delivery / (name + '.sha256')).write_text(digest + '  ' + name + '\n')
+          (delivery / '먼저읽기.txt').write_text(
+              'Play Console에는 SOUL_READER_8.5.6_FIRST_PLAY_UPLOAD.aab 파일을 올리세요.\n'
+              'CMS는 업로드 키의 암호화 백업입니다. 별도로 제공된 복구 키 ZIP 및 비밀번호 파일과 함께 안전하게 보관하세요.\n'
+              '이 파일은 상품 등록 준비용입니다. 로그인·검증 서버·실제 결제는 아직 연결되지 않았습니다.\n', encoding='utf-8')
+          info = json.loads((delivery / 'BUILD_INFO.json').read_text())
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write('\n## Verified first Play upload AAB\n\n```json\n')
+              output.write(json.dumps(info, indent=2) + '\n```\n\n')
+              output.write('Package, version95, non-debuggable release, billing permission/library, upload certificate and all70 original audio files verified. Live billing remains disabled.\n')
+          PY
+      - name: Publish verified first Play upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: SOUL_READER_8.5.6_FIRST_PLAY_UPLOAD_AAB
+          path: ${{ runner.temp }}/soul-play-delivery/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Remove plaintext key material and generated signing properties
+        if: always()
+        run: |
+          rm -rf "$SOUL_BOOTSTRAP_PRIVATE_DIR"
+          rm -f android/key.properties

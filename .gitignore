@@ -10,3 +10,7 @@ __pycache__/
 *.p12
 *.pfx
 key.properties
+backup-recipient-private.pem
+backup-decryption-password.txt
+SOUL_READER_BACKUP_PASSWORD.txt
+signing.json

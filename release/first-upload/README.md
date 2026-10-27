@@ -1,0 +1,35 @@
+# First Play upload: one-time owner-key bootstrap
+
+The owner confirmed no APK/AAB has previously been uploaded for this Play app.
+Package: `com.soulreader.soul_reader`; first upload version: `8.5.6+95`.
+
+The dedicated bootstrap workflow runs only when branch
+`build/first-play-upload-20261027` is first created, on its first run attempt.
+Do not rerun or recreate the bootstrap after a successful AAB is uploaded.
+Archive the workflow trigger immediately after the successful build.
+
+Only the **public** backup-recipient certificate is committed here. Its DER
+SHA-256 is recorded in `public-metadata.json`. The encrypted private decryption
+key and its password remain outside this repository for the owner's private
+backup download. Neither is supplied to GitHub Actions.
+
+The runner creates the long-lived upload JKS in a private temporary directory.
+It encrypts a backup containing the JKS and credentials using authenticated CMS
+AES-256-GCM and RSA-OAEP-SHA256 to the public recipient. Only ciphertext is
+published as an artifact and recovery annotations. No plaintext signing key,
+password or signing configuration is published or cached.
+
+Before recommending Play upload, recover the actual encrypted backup into a
+private external directory, verify successful authenticated decryption, and
+compare the recovered JKS certificate with the AAB's verified certificate.
+Keep the encrypted backup, recipient private-key backup and its password safely
+outside this cloud workspace. Artifact retention is not permanent key storage.
+
+The final AAB must pass bundletool validation, package/version/non-debuggable
+manifest checks, billing permission/library checks, JAR signature/certificate
+verification, and preservation of all 70 original audio files.
+
+This is an **internal-test payment-preparation build**. Login, the purchase
+verification backend and live billing are still unconfigured. It enables the
+first Play binary upload/product-registration stage; it does not complete the
+production payment service.
