@@ -60,7 +60,9 @@ base64는 암호화가 아니므로 키와 동일하게 비공개로 취급합�
 
 일반 APK CI에는 임시 테스트 키를 사용한 release 컴파일 검사도 추가했습니다. 이 검사의 키와 AAB는 삭제하고 배포하지 않습니다. 실제 업로드용 키 없이도 생성된 Kotlin 서명 설정을 검증하기 위한 검사이며, 소유자의 업로드 키를 대체하지 않습니다.
 
-검증 기록: [Actions 40311646703](https://github.com/pjinh1229-code/soul-reader-/actions/runs/40311646703)에서 Python 검사 20개, 기존 UI·Dart·Flutter 검사, 임시 키를 사용한 실제 release AAB 컴파일·서명·70개 음원 검사와 debug APK 빌드·검사를 통과했습니다. 소유자의 키를 사용한 AAB 생성·업로드·실제 구매 테스트는 아직 완료되지 않았습니다.
+검증 기록: [Actions 40311646703](https://github.com/pjinh1229-code/soul-reader-/actions/runs/40311646703)에서 Python 검사 20개, 기존 UI·Dart·Flutter 검사, 임시 키를 사용한 실제 release AAB 컴파일·서명·70개 음원 검사와 debug APK 빌드·검사를 통과했습니다.
+
+첫 업로드용 소유자 키와 실제 AAB는 [Actions 40442669574](https://github.com/pjinh1229-code/soul-reader-/actions/runs/40442669574)에서 생성·검증했습니다. 버전은 `8.5.6+95`이며 패키지·결제 권한·라이브러리·release 설정·서명·원본 음원 70개 검사를 통과했습니다. 실제 암호화 백업의 복구와 개인 키 서명도 확인했습니다. 키를 재생성하지 않도록 최초 생성 워크플로는 보관용 파일로 전환했습니다. 인증서 지문과 백업 안내는 [첫 업로드 기록](../release/first-upload/README.md)을 참고하세요. Play Console 파일 업로드·상품 등록·실제 구매 테스트는 아직 완료되지 않았습니다.
 
 ## 2. 인증·구매 검증 서버
 

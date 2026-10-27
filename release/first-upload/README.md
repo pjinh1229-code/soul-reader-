@@ -12,6 +12,22 @@ Owner delivery: [first Play AAB artifact](https://github.com/pjinh1229-code/soul
 This is the canonical first-upload candidate; future builds must reuse its
 upload key recovered from the encrypted owner backup.
 
+Canonical upload-certificate SHA-256:
+`c4d31b29444fcd6fabea9ee91a01fd6bab3383a07079302e19ff32a1d7805139`.
+Encrypted CMS payload SHA-256:
+`bcedc02a22a9f316c38b018b8bcdf7397c68775426b9b1b54505f2df1f2f7405`.
+The actual published ciphertext was reconstructed and checksum-verified,
+authenticated-decrypted outside the repository, and its recovered JKS was used
+to sign and verify a temporary file. The recovered certificate matches the
+certificate verified on the AAB. No credentials were printed.
+
+Private owner delivery files are `SOUL_READER_UPLOAD_KEY_BACKUP.zip` and the
+separate `SOUL_READER_BACKUP_PASSWORD.txt` in the workspace exports. These are
+not repository files. The ZIP contains the actual encrypted CMS backup and an
+encrypted recipient private key, with recovery instructions. The password is
+never included in that ZIP or a GitHub artifact. The owner must retain both
+outside this cloud workspace for future app updates.
+
 The owner confirmed no APK/AAB has previously been uploaded for this Play app.
 Package: `com.soulreader.soul_reader`; first upload version: `8.5.6+95`.
 
