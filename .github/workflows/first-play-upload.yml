@@ -2,13 +2,13 @@ name: First SOUL READER Play AAB with encrypted owner-key backup
 
 on:
   push:
-    branches: [build/first-play-upload-20261027]
+    branches: [build/first-play-upload-20261027-2]
 
 permissions:
   contents: read
 
 concurrency:
-  group: soul-first-play-upload-20261027
+  group: soul-first-play-upload-20261027-2
   cancel-in-progress: false
 
 jobs:
@@ -17,11 +17,25 @@ jobs:
     if: github.event.created == true && github.run_attempt == 1
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      SOUL_BOOTSTRAP_PRIVATE_DIR: ${{ runner.temp }}/soul-owner-upload-key-${{ github.run_id }}
-      SOUL_BOOTSTRAP_RECIPIENT_CERT: ${{ github.workspace }}/release/first-upload/backup-recipient.pem
-      SOUL_BOOTSTRAP_BACKUP_PATH: ${{ runner.temp }}/SOUL_READER_UPLOAD_KEY_ENCRYPTED_BACKUP.cms
     steps:
+      - name: Initialize private bootstrap paths on the allocated runner
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          temporary = Path(os.environ['RUNNER_TEMP'])
+          workspace = Path(os.environ['GITHUB_WORKSPACE'])
+          settings = {
+              'SOUL_BOOTSTRAP_PRIVATE_DIR': str(temporary / ('soul-owner-upload-key-' + os.environ['GITHUB_RUN_ID'])),
+              'SOUL_BOOTSTRAP_RECIPIENT_CERT': str(workspace / 'release/first-upload/backup-recipient.pem'),
+              'SOUL_BOOTSTRAP_BACKUP_PATH': str(temporary / 'SOUL_READER_UPLOAD_KEY_ENCRYPTED_BACKUP.cms'),
+          }
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              for name, value in settings.items():
+                  if any(c in value for c in '\r\n\0'):
+                      raise SystemExit('Invalid runner path')
+                  output.write(name + '=' + value + '\n')
+          PY
       - name: Checkout reviewed application and public recipient certificate
         uses: actions/checkout@v4
         with:
@@ -178,5 +192,7 @@ jobs:
       - name: Remove plaintext key material and generated signing properties
         if: always()
         run: |
-          rm -rf "$SOUL_BOOTSTRAP_PRIVATE_DIR"
+          if [ -n "${SOUL_BOOTSTRAP_PRIVATE_DIR:-}" ]; then
+            rm -rf "$SOUL_BOOTSTRAP_PRIVATE_DIR"
+          fi
           rm -f android/key.properties

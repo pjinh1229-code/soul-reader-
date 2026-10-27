@@ -4,9 +4,13 @@ The owner confirmed no APK/AAB has previously been uploaded for this Play app.
 Package: `com.soulreader.soul_reader`; first upload version: `8.5.6+95`.
 
 The dedicated bootstrap workflow runs only when branch
-`build/first-play-upload-20261027` is first created, on its first run attempt.
+`build/first-play-upload-20261027-2` is first created, on its first run attempt.
 Do not rerun or recreate the bootstrap after a successful AAB is uploaded.
 Archive the workflow trigger immediately after the successful build.
+
+The first recipe run 40442475566 failed schema validation before any job or key
+generation. The corrected branch initializes runner paths in a step, after the
+runner has been allocated.
 
 Only the **public** backup-recipient certificate is committed here. Its DER
 SHA-256 is recorded in `public-metadata.json`. The encrypted private decryption
