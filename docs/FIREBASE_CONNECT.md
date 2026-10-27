@@ -44,3 +44,9 @@ Google Play API 권한, 영구 원장과 실제 기기 검증이 필요합니다
 `GOOGLE_WEB_CLIENT_ID`입니다. 사용자 토큰이나 서버 비공개 키를 앱 설정에
 넣지 않습니다. 네이티브 SDK는 명시적인 FirebaseOptions와 Web 클라이언트
 ID를 사용하므로 Firebase 안내 화면의 Gradle 수정은 별도로 필요하지 않습니다.
+
+## 확인한 결과
+
+앱 연결 코드 `b33be78`의 [CI 40596026771](https://github.com/pjinh1229-code/soul-reader-/actions/runs/40596026771)에서 Dart 분석, 전체 Flutter 테스트, Chromium·Python 검사, release AAB 컴파일, debug APK 빌드와 서명·원본 음원 검사가 통과했습니다. 임시 CI 키로 만든 release AAB는 업로드용으로 배포하지 않습니다.
+
+별도 서버 검사 66개와 Wrangler 배포 없는 번들 생성, 로컬 D1 마이그레이션 16개 SQL 명령 및 재실행 검사를 통과했습니다. 설치·재실행 환경 설정도 저장했습니다. 실제 Firebase 로그인·외부 서버 배포·Google Play 구매·정식 출시는 검증 범위에 포함되지 않습니다.
