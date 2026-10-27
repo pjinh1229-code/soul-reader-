@@ -1,5 +1,17 @@
 # First Play upload: one-time owner-key bootstrap
 
+**Completed and archived. Do not generate a replacement upload key.**
+
+The first owner-signed AAB passed [Actions run 40442669574](https://github.com/pjinh1229-code/soul-reader-/actions/runs/40442669574)
+at source commit `2ce5628`. Its package/version, release flags, billing
+permission/library, signature certificate and all 70 original audio files were
+verified. The active one-time workflow has been moved to
+`first-play-upload.yml.disabled` so later pushes cannot create a different key.
+
+Owner delivery: [first Play AAB artifact](https://github.com/pjinh1229-code/soul-reader-/actions/runs/40442669574/artifacts/12707521425).
+This is the canonical first-upload candidate; future builds must reuse its
+upload key recovered from the encrypted owner backup.
+
 The owner confirmed no APK/AAB has previously been uploaded for this Play app.
 Package: `com.soulreader.soul_reader`; first upload version: `8.5.6+95`.
 
