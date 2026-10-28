@@ -72,3 +72,11 @@ The owner's public origin is
 `Check deployed billing Worker` GitHub workflow runs these read-only checks from
 an external runner, including after successful production Workers Builds. These
 checks send no token and cannot establish live Google Play purchase permissions.
+
+If the Google service-account value needs correction, the owner can open
+`/setup/service-account` on the public Worker. This static page validates the
+owner-selected original JSON and copies compact JSON to their clipboard. File
+contents never leave their browser through this helper: there is no upload
+handler, network request, storage, or rendered secret value; CSP blocks network
+connections, forms and external resources. The owner pastes directly into the
+existing Cloudflare runtime Secret. Never send this JSON to Codex or chat.

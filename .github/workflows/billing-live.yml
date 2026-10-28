@@ -14,6 +14,21 @@ permissions:
   contents: read
 
 jobs:
+  service-account-helper:
+    if: >-
+      github.event_name != 'check_run' ||
+      (github.event.check_run.name == 'Workers Builds: soul-reader-billing' &&
+       github.event.check_run.conclusion == 'success' &&
+       github.event.check_run.check_suite.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Check the owner file-copy page without selecting a file
+        run: node server/scripts/check-deployed-worker.mjs --setup-only
   public-runtime:
     if: >-
       github.event_name != 'check_run' ||

@@ -1,6 +1,7 @@
 import { FirebaseTokenAuthenticator, GooglePlayPublisherClient, GoogleClientFailure } from './google_clients.mjs';
 import { PLAY_PURCHASE_CATALOG, normalizePlayPurchaseV2, PlayPurchaseValidationError } from './play_purchase.mjs';
 import { BillingLedger, BillingServerFailure, fail, publicGrant, secretKey, tokenHash } from './ledger.mjs';
+import { SETUP_PAGE, SETUP_CSP } from './setup_page.mjs';
 
 const PACKAGE = 'com.soulreader.soul_reader';
 // Conservative free-Worker bound, including D1 operations and one OAuth refresh
@@ -236,6 +237,16 @@ export function createBillingWorker({ clock = Date.now, authenticateFactory, pub
     try {
       const url = new URL(request.url);
       if (url.protocol !== 'https:') fail('invalid_request');
+      if (request.method === 'GET' && url.pathname === '/setup/service-account' && !url.search) {
+        // This page only reads a user-selected file in that user's browser.
+        // It submits no file content and works before runtime secrets are valid.
+        return new Response(SETUP_PAGE, { headers: {
+          'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
+          'Content-Security-Policy': SETUP_CSP, 'Referrer-Policy': 'no-referrer',
+          'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY',
+          'Permissions-Policy': 'clipboard-write=(self)',
+        } });
+      }
       const health = request.method === 'GET' && url.pathname === '/health' && !url.search;
       healthRuntimeFailed = health;
       const rt = runtime(env);

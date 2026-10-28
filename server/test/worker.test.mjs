@@ -214,6 +214,27 @@ test('unexpected health constructor errors retain their safe envelope without ex
   assert.deepEqual(await other.json(), { error: { code: 'billing_storage_failed' } });
 });
 
+test('local-file setup page works without runtime configuration and cannot upload or expose secrets', async () => {
+  const worker = createBillingWorker({ authenticateFactory: () => { throw new Error('must-not-construct-runtime'); } });
+  const response = await worker.fetch(new Request('https://billing.example/setup/service-account'),
+    new Proxy({}, { get() { throw new Error('must-not-read-environment'); } }));
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /type="file"/);
+  assert.match(html, /JSON 내용 복사/);
+  assert.match(response.headers.get('content-security-policy'), /connect-src 'none'/);
+  assert.match(response.headers.get('content-security-policy'), /form-action 'none'/);
+  assert.match(response.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.equal(response.headers.get('x-frame-options'), 'DENY');
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  const upload = await worker.fetch(new Request('https://billing.example/setup/service-account', {
+    method: 'POST', body: 'private-file-fixture-not-an-upload-route',
+  }), {});
+  assert.equal(upload.status, 503);
+  assert.equal((await upload.text()).includes('private-file-fixture'), false);
+});
+
 test('purchase is encrypted and durable with finalization job before Google ACK; duplicate replay returns same grant', async t => {
   const s = setup(t, { onAck: async ({ token, db }) => {
     const row = await db.prepare('SELECT * FROM purchases WHERE token_hash=?').bind(await tokenHash(token)).first();
