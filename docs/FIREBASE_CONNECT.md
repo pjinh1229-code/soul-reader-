@@ -68,8 +68,8 @@ ID를 사용하므로 Firebase 안내 화면의 Gradle 수정은 별도로 필�
 CI 개발용 APK는 별도 인증서이므로 Play 앱의 지문 등록으로 로그인 시험을
 대신하지 않습니다. 원래 업로드 키를 재생성하지 않습니다.
 
-소유자는 Cloudflare 계정이 없다고 확인했습니다. 다음 단계는 무료 계정
-가입 후 구매 검증 서버의 계정 인증·D1 구성·보안 런타임 설정 연결입니다.
+소유자가 Cloudflare 무료 가입 완료를 알려주었습니다. 다음 단계는
+[Cloudflare 계정 연결](CLOUDFLARE_CONNECT.md), D1 구성과 보안 런타임 설정입니다.
 
 앱 연결 코드 `b33be78`의 [CI 40596026771](https://github.com/pjinh1229-code/soul-reader-/actions/runs/40596026771)에서 Dart 분석, 전체 Flutter 테스트, Chromium·Python 검사, release AAB 컴파일, debug APK 빌드와 서명·원본 음원 검사가 통과했습니다. 임시 CI 키로 만든 release AAB는 업로드용으로 배포하지 않습니다.
 
