@@ -36,6 +36,31 @@ cd server && npx --no-install wrangler d1 migrations apply DB --remote --config 
 
 Rerun the build to initialize migration tracking. Do not initialize by pasting
 raw schema and later run Wrangler migrations without reconciling their history.
-After migration succeeds, configure server secrets as described in README.md.
-Keep the app verifier URL unset until live checks pass. The deployment has not
-been executed by Codex, whose Cloudflare API access is blocked by a proxy.
+The owner confirmed successful remote migration and deployment in build
+`53354f53-1326-439d-bc38-4ca2b906d685`. Codex can trigger these builds through
+GitHub; direct Cloudflare API access from Codex is blocked by a proxy. Configure
+the server secrets below and keep the app verifier URL unset until live checks pass.
+
+## Private runtime key initialization
+
+The owner supplies `GOOGLE_SERVICE_ACCOUNT_JSON` directly as a production runtime
+Secret. The custom build helper can then initialize `ACCOUNT_HMAC_KEY` and
+`TOKEN_ENCRYPTION_KEY` inside the production Workers Builds environment, using
+its existing build authentication. Neither generated value is printed, written
+to the checkout, returned to Codex, or stored in D1. Each is generated from
+32 independent random bytes and sent directly to Cloudflare's secrets API.
+
+The helper verifies the actual Wrangler parent invocation and skips local,
+preview, and dry-run builds. It validates the target account/Worker and requires
+the service-account Secret before generating keys. Existing keys are retained.
+A unique row in the separate D1 `runtime_secret_initialization` metadata table
+serializes first initialization. It contains only the Worker name, build ID,
+state, and timestamp. Completed setup never automatically replaces a missing
+key; an interrupted or ambiguous write never grants a different build the lock.
+Investigate such failures before any recovery operation. Do not delete/reset
+this record or rotate keys to work around a deployment error.
+
+Wrangler preserves runtime secrets during the subsequent Worker deployment.
+Successful initialization establishes configuration only; live Google API
+permissions, sign-in, purchases, refunds, and Worker CPU capacity require their
+own checks. Never add private JSON or API token values to GitHub or build logs.
