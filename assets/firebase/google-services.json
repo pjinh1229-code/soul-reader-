@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "626760618280",
+    "project_id": "soul-reader-a91f5",
+    "storage_bucket": "soul-reader-a91f5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:626760618280:android:96fe33243f4204847e401d",
+        "android_client_info": {
+          "package_name": "com.soulreader.soul_reader"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "626760618280-ddtiok92kki4d14s67182gtsv51l92al.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.soulreader.soul_reader",
+            "certificate_hash": "64897550d51b03fe9f2e5e36d8293b933d908a1e"
+          }
+        },
+        {
+          "client_id": "626760618280-k29si0jdamedfkqal0iapn98mr7et8kh.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDa-e3b8WB1qJglFNmMCbGGs-TOf99PjHg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "626760618280-k29si0jdamedfkqal0iapn98mr7et8kh.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

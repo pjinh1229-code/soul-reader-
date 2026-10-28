@@ -76,6 +76,8 @@ Map<String, dynamic> services({bool oauth = true,
 };
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('native session', () {
     test('persisted identity and tokens never open a Google picker', () async {
       final gateway = FakeGateway(alice);
@@ -266,6 +268,34 @@ void main() {
   });
 
   group('public Firebase configuration', () {
+    test('bundled Firebase asset configures silent native authentication', () async {
+      final gateway = FakeGateway();
+      final received = <FirebaseBillingPublicConfig>[];
+      final session = await createConfiguredFirebaseBillingSession(
+        overrides: const FirebaseBillingOverrides(),
+        gatewayFactory: (config) async {
+          received.add(config);
+          return gateway;
+        },
+      );
+      addTearDown(() async {
+        if (session is InteractiveBillingSession) await session.dispose();
+      });
+
+      expect(received, hasLength(1));
+      final config = received.single;
+      expect(config.isValid, isTrue);
+      expect(config.projectId, 'soul-reader-a91f5');
+      expect(config.messagingSenderId, sender);
+      expect(config.appId, '1:$sender:android:96fe33243f4204847e401d');
+      expect(config.webClientId,
+          '$sender-k29si0jdamedfkqal0iapn98mr7et8kh.apps.googleusercontent.com');
+      expect(session, isA<InteractiveBillingSession>());
+      expect(session.isConfigured, isTrue);
+      expect(gateway.signInCalls, 0);
+      expect(gateway.tokenCalls, 0);
+    });
+
     test('selects the exact Android package and valid Web client', () {
       final config = FirebaseBillingPublicConfig.fromGoogleServices(services());
       expect(config.isValid, isTrue);
