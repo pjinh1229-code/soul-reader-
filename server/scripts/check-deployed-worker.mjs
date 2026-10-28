@@ -33,7 +33,7 @@ async function readText(response) {
 async function probe(check) {
   try {
     const response = await fetch(`${ORIGIN}${check.path}`, {
-      method: 'GET', redirect: 'error', signal: AbortSignal.timeout(15_000),
+      method: 'GET', redirect: 'error', signal: AbortSignal.timeout(5_000),
       headers: { Accept: 'application/json' },
     });
     const text = await readText(response);
@@ -61,13 +61,14 @@ async function probe(check) {
 
 let passed = false;
 let finalResults = [];
-for (let attempt = 1; attempt <= 6; attempt++) {
+const attempts = setupOnly ? 16 : 6;
+for (let attempt = 1; attempt <= attempts; attempt++) {
   const results = await Promise.all(checks.map(probe));
   finalResults = results;
   console.log(`Public Worker check ${attempt}: ${ORIGIN}`);
   for (const result of results) console.log(result.outcome);
   if (results.every(result => result.valid)) { passed = true; break; }
-  if (attempt < 6) await delay(5000);
+  if (attempt < attempts) await delay(5000);
 }
 if (!passed) {
   for (const result of finalResults.filter(result => !result.valid)) {
