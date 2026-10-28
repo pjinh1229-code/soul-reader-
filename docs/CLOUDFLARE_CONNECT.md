@@ -45,6 +45,11 @@ Cloudflare 목록에서 폐기합니다. 토큰값을 코드나 API 요청에 �
 선택·서버 CI만 추가하고 기존 Android 앱 파일을 보존합니다. Android 로그인
 코드와 다음 Play AAB 작업은 계속 `feat/play-billing-8.5.6`에서 진행합니다.
 
+기본 브랜치의 서버 추가 커밋 `1bad565`는
+[서버 CI 40654690779](https://github.com/pjinh1229-code/soul-reader-/actions/runs/40654690779)를 통과했습니다.
+Node24 선택·의존성 설치·서버 테스트·실제 설정의 배포 없는 번들 생성을
+확인했습니다. 같은 빌드 명령의 로컬 실행에서는 테스트 66개가 통과했습니다.
+
 Cloudflare가 생성하는 기본 빌드용 토큰에는 D1 권한이 포함되지 않습니다.
 **My Profile → API Tokens**에서 해당 Cloudflare 보관 사용자 토큰에 대상
 계정의 **D1 → Edit**를 추가하고 Builds에서 선택해야 원격 마이그레이션을
