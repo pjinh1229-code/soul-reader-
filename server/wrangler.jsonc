@@ -5,6 +5,9 @@
   "main": "src/worker.mjs",
   "compatibility_date": "2026-10-27",
   "workers_dev": true,
+  "build": {
+    "command": "node scripts/ensure-runtime-secrets.mjs"
+  },
   "vars": {
     "FIREBASE_PROJECT_ID": "soul-reader-a91f5",
     "PLAY_PACKAGE_NAME": "com.soulreader.soul_reader"
