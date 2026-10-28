@@ -18,13 +18,16 @@ Cloudflare 목록에서 폐기합니다. 토큰값을 코드나 API 요청에 �
 3. **Database ID(UUID)**만 전달합니다. 이 값은 인증 토큰이 아닌 공개 구성
    식별자입니다. Codex가 실제 UUID를 넣은 `server/wrangler.jsonc`를 준비합니다.
 
-예제의 `00000000-0000-0000-0000-000000000000`은 실제 배포에 사용하지 않습니다.
-현재 원격 DB 식별자는 아직 없으며 데이터베이스도 생성하지 않았습니다.
+소유자가 생성한 데이터베이스 ID는
+`e510df4a-00f3-4d29-b689-c08cdb422caf`입니다. 실제 바인딩을
+`server/wrangler.jsonc`에 연결했습니다. 계정 ID도 명시했으며 비공개 값은
+포함하지 않습니다. 소유자의 ID 전달을 확인했지만 원격 데이터베이스에
+접속하거나 원격 마이그레이션을 실행한 상태는 아닙니다.
 
 ## 2. Cloudflare에서 저장소 연결
 
 소유자가 **Workers & Pages → Create application → GitHub**에서 다음을
-설정합니다. 실제 D1 UUID가 저장소 설정에 반영된 다음 실행합니다.
+설정합니다. 실제 D1 UUID는 저장소 설정에 반영되어 있습니다.
 
 | 항목 | 값 |
 | --- | --- |
@@ -33,12 +36,8 @@ Cloudflare 목록에서 폐기합니다. 토큰값을 코드나 API 요청에 �
 | Worker 이름 | `soul-reader-billing` |
 | Root directory | `server` |
 | Build command | `npm test` |
-| Deploy command | 아래 명령 |
+| Deploy command (첫 업로드) | `npx wrangler deploy --config wrangler.jsonc` |
 | Node | `server/.node-version`의 24 |
-
-```sh
-npx wrangler d1 migrations apply soul-reader-billing --remote && npx wrangler deploy
-```
 
 Cloudflare가 생성하는 기본 빌드용 토큰에는 D1 권한이 포함되지 않습니다.
 **My Profile → API Tokens**에서 해당 Cloudflare 보관 사용자 토큰에 대상
@@ -46,9 +45,21 @@ Cloudflare가 생성하는 기본 빌드용 토큰에는 D1 권한이 포함되�
 실행할 수 있습니다. 계정 소유 토큰을 재사용하지 않습니다. 토큰은 Cloudflare
 안에서 관리하며 채팅으로 보내지 않습니다.
 
+첫 업로드는 Worker와 DB 바인딩을 준비하는 단계입니다. 원격 API의 실제
+업로드 승인은 아직 확인하지 않았습니다. 토큰의 D1 권한을 설정한 다음
+**Worker → Settings → Builds → Deploy command**를 아래처럼 바꿔 재실행합니다.
+
+```sh
+npx wrangler d1 migrations apply DB --remote --config wrangler.jsonc && npx wrangler deploy --config wrangler.jsonc
+```
+
 D1 콘솔에 원시 SQL을 넣는 방식과 Wrangler 마이그레이션을 혼용하면
 `d1_migrations` 추적 정보가 어긋날 수 있어 위 명령으로 초기화합니다.
 재실행 시 Wrangler의 완료된 마이그레이션 추적을 사용합니다.
+
+보안 런타임 설정은 원격 마이그레이션 성공 후 입력합니다. 초기 업로드만
+완료한 동안 `/health`의 HTTP503과 예약 작업의 설정 오류는 준비 미완료
+상태를 나타냅니다. 이 상태를 결제 서버 운영 완료로 안내하지 않습니다.
 
 ## 3. 서버 보안 설정과 검증
 
@@ -61,6 +72,10 @@ Google 비공개 키는 채팅·저장소·앱 파일에 넣지 않습니다.
 무료 Worker CPU 사용량, Google API 권한, 로그인·구매는 아직 검증하지
 않았습니다. 앱의 서버 주소도 비어 있어 실제 구매는 비활성 상태입니다.
 `/health`는 설정 생성만 검사하며 실제 Google 결제 검증을 증명하지 않습니다.
+
+실제 ID를 반영한 `server/wrangler.jsonc`로 배포 없는 번들 생성과 `--local`
+마이그레이션의 16개 SQL 명령 검사를 통과했습니다. 이 검사는 원격 DB에
+접속하거나 원격 스키마를 변경한 결과가 아닙니다.
 
 공식 자료: [Builds 설정](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/),
 [빌드 환경](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/),
