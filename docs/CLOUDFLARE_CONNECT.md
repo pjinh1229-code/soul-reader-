@@ -1,66 +1,67 @@
-# Cloudflare 계정 연결
+# Cloudflare 대시보드에서 배포
 
-소유자는 2026-10-28 무료 계정 가입 완료를 알려주었습니다. 계정을 다시
-만들지 않습니다. 서버 소스, D1 마이그레이션과 배포용 Worker 번들은
-준비되어 있으며 기존 서버 테스트 66개와 배포 없는 번들 검사를 통과했습니다.
-실제 계정 인증·외부 데이터베이스 생성·서버 배포는 아직 하지 않았습니다.
+소유자는 무료 Cloudflare 계정을 만들었습니다. 현재 Codex 실행 환경에는
+Cloudflare 보안 토큰이 전달되지 않았고, API 접속도 프록시 CONNECT403으로
+차단됩니다. Cloudflare 대시보드에서 GitHub를 연결하는 Workers Builds 방식으로
+진행합니다. 토큰값을 채팅이나 Codex에 전달하지 않습니다.
 
-소유자가 계정 API 토큰 생성 화면을 공유했습니다. 계정 ID는 확인했고
-`CLOUDFLARE_ACCOUNT_ID` 공개 환경 설정에 기록했습니다. 화면의 사용 예시에
-토큰 전체가 포함되어 있어 해당 토큰은 Cloudflare에서 재발급/폐기 후 교체해야
-합니다. 토큰값은 기록하거나 API 요청에 사용하지 않았으며 현재 런타임에
-`CLOUDFLARE_API_TOKEN` 보안 값은 없습니다. 새 값은 보안 환경 설정으로만
-받고, 소유자는 저장 완료 여부만 채팅으로 알립니다.
+소유자가 만든 계정 소유 API 토큰은 이 경로에서 사용하지 않습니다. 현재
+공식 Workers Builds 문서는 사용자 토큰만 지원한다고 명시합니다. Cloudflare가
+빌드용 사용자 토큰을 생성·보관하도록 설정합니다. 사진에 노출된 기존 토큰은
+Cloudflare 목록에서 폐기합니다. 토큰값을 코드나 API 요청에 사용한 적은 없습니다.
 
-## 소유자의 연결 단계
+## 1. 데이터베이스 식별자 준비
 
-1. [사용자 API 토큰](https://dash.cloudflare.com/profile/api-tokens)에서
-   **Create Token → Create Custom Token**을 선택합니다.
-2. 이름은 `SOUL READER deploy`처럼 용도를 식별할 수 있게 지정하고,
-   **Account** 범위에 다음 권한을 설정합니다.
+1. [D1 화면](https://dash.cloudflare.com/ee33db3044223ccec6ff9c0da863d2a5/workers/d1)을 엽니다.
+2. 기존 `soul-reader-billing`이 있으면 열고, 없으면 **Create Database**에서
+   이름을 `soul-reader-billing`으로 지정해 무료 플랜에서 생성합니다.
+3. **Database ID(UUID)**만 전달합니다. 이 값은 인증 토큰이 아닌 공개 구성
+   식별자입니다. Codex가 실제 UUID를 넣은 `server/wrangler.jsonc`를 준비합니다.
 
-   | 권한 | 수준 | 용도 |
-   | --- | --- | --- |
-   | Workers Scripts | Edit | Worker 업로드, workers.dev 주소, 보안 설정과 예약 작업 |
-   | D1 | Edit | 데이터베이스 생성과 SQL 마이그레이션 |
-   | Account Settings | Read | 대상 계정 검색과 연결 확인 |
+예제의 `00000000-0000-0000-0000-000000000000`은 실제 배포에 사용하지 않습니다.
+현재 원격 DB 식별자는 아직 없으며 데이터베이스도 생성하지 않았습니다.
 
-3. **Account Resources → Include → Specific account**에서 이번에 가입한
-   계정을 선택합니다. Zone 권한, Global API Key와 Account Settings Edit는
-   이 작업에 사용하지 않습니다.
-4. 생성한 토큰을 채팅에 보내지 않고, 이 Codex 작업의 환경 설정에서
-   **`CLOUDFLARE_API_TOKEN`** 보안 값으로 입력합니다. 토큰은
-   `api.cloudflare.com` HTTPS 요청의 인증 헤더에만 사용합니다.
+## 2. Cloudflare에서 저장소 연결
 
-환경 설정 초안에 토큰 요구사항과 해당 도메인을 추가했습니다. 저장된 초안은
-런타임 적용이나 Cloudflare 인증 성공을 뜻하지 않습니다. 현재 인증 없는
-접속 검사도 프록시 CONNECT403으로 차단되므로 설정 반영 후 통신부터
-다시 확인합니다. 이 응답은 Cloudflare가 토큰을 거부했다는 증거가 아닙니다.
+소유자가 **Workers & Pages → Create application → GitHub**에서 다음을
+설정합니다. 실제 D1 UUID가 저장소 설정에 반영된 다음 실행합니다.
 
-## 계정이 연결된 다음 실행할 준비
+| 항목 | 값 |
+| --- | --- |
+| 저장소 | `pjinh1229-code/soul-reader-` |
+| 브랜치 | `feat/play-billing-8.5.6` |
+| Worker 이름 | `soul-reader-billing` |
+| Root directory | `server` |
+| Build command | `npm test` |
+| Deploy command | 아래 명령 |
+| Node | `server/.node-version`의 24 |
 
-첫 확인은 토큰 상태와 계정 조회만 수행합니다. 새 계정 하나가 조회되면 그
-공개 계정 ID를 사용하고, 여러 계정이 조회되면 대상을 확인합니다. 기존
-데이터베이스나 Worker는 삭제하지 않습니다. 준비한 리소스 이름은 모두
-`soul-reader-billing`이며, 같은 이름이 이미 있으면 먼저 상태를 읽습니다.
+```sh
+npx wrangler d1 migrations apply soul-reader-billing --remote && npx wrangler deploy
+```
 
-이번에 만든 것은 계정 소유 API 토큰이므로 상태 확인은
-`GET /client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/tokens/verify`를 사용합니다.
-사용자 토큰 확인 경로의 실패만으로 계정 토큰이 잘못되었다고 판단하지
-않습니다. 인증 헤더는 지정된 Cloudflare API 도메인으로만 전송합니다.
+Cloudflare가 생성하는 기본 빌드용 토큰에는 D1 권한이 포함되지 않습니다.
+**My Profile → API Tokens**에서 해당 Cloudflare 보관 사용자 토큰에 대상
+계정의 **D1 → Edit**를 추가하고 Builds에서 선택해야 원격 마이그레이션을
+실행할 수 있습니다. 계정 소유 토큰을 재사용하지 않습니다. 토큰은 Cloudflare
+안에서 관리하며 채팅으로 보내지 않습니다.
 
-기존 Wrangler 4.153.0과 `server/wrangler.example.jsonc`를 사용해 D1 생성,
-`server/migrations/0001_billing.sql` 적용, 실제 D1 바인딩을 포함하는 배포
-설정을 준비합니다. Worker 소스는 `server/src/worker.mjs`입니다. 계정 ID와
-데이터베이스 UUID는 공개 구성 값이며 토큰이나 Google 비공개 키를 설정
-파일에 기록하지 않습니다.
+D1 콘솔에 원시 SQL을 넣는 방식과 Wrangler 마이그레이션을 혼용하면
+`d1_migrations` 추적 정보가 어긋날 수 있어 위 명령으로 초기화합니다.
+재실행 시 Wrangler의 완료된 마이그레이션 추적을 사용합니다.
 
-이 연결 토큰은 Google Play 구매 검증 자격증명을 대신하지 않습니다.
-`GOOGLE_SERVICE_ACCOUNT_JSON`, `ACCOUNT_HMAC_KEY`, `TOKEN_ENCRYPTION_KEY`는
-서버의 보안 런타임 설정에 별도로 필요합니다. 현재 값은 없고, 앱의 서버
-주소도 비어 있어 실제 구매는 비활성 상태입니다. Google 비공개 키는 채팅이나
-앱 설정 파일로 받지 않습니다. 배포·실기기 구매와 무료 플랜 사용량 검증이
-끝나기 전 운영 완료로 안내하지 않습니다.
+## 3. 서버 보안 설정과 검증
 
-권한 확인 자료: [공식 API 명세](https://raw.githubusercontent.com/cloudflare/api-schemas/main/openapi.yaml),
-[공식 권한 목록](https://raw.githubusercontent.com/cloudflare/cloudflare-docs/production/src/content/docs/fundamentals/api/reference/permissions.mdx).
+Worker의 **Settings → Variables and Secrets**에서 **Secret** 유형으로
+`GOOGLE_SERVICE_ACCOUNT_JSON`, `ACCOUNT_HMAC_KEY`, `TOKEN_ENCRYPTION_KEY`를
+별도 설정해야 합니다. Build secrets는 서버 런타임 설정을 대신하지 않습니다.
+Google 비공개 키는 채팅·저장소·앱 파일에 넣지 않습니다.
+
+서버 코드는 테스트 66개와 배포 없는 번들 검사를 통과했습니다. 실제 배포와
+무료 Worker CPU 사용량, Google API 권한, 로그인·구매는 아직 검증하지
+않았습니다. 앱의 서버 주소도 비어 있어 실제 구매는 비활성 상태입니다.
+`/health`는 설정 생성만 검사하며 실제 Google 결제 검증을 증명하지 않습니다.
+
+공식 자료: [Builds 설정](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/),
+[빌드 환경](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/),
+[D1 시작](https://developers.cloudflare.com/d1/get-started/).
