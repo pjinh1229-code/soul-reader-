@@ -3,9 +3,6 @@ name: Check deployed billing Worker
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/billing-live.yml'
-      - 'server/scripts/check-deployed-worker.mjs'
   check_run:
     types: [completed]
   workflow_dispatch:
