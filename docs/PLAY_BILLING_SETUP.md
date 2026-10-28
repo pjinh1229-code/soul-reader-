@@ -66,7 +66,7 @@ base64는 암호화가 아니므로 키와 동일하게 비공개로 취급합�
 
 ## 2. 인증·구매 검증 서버
 
-**이 저장소의 코드만으로 서버가 배포되지는 않습니다.** Firebase Google 로그인과 계정별 구매 권한 분리, Worker HTTP 서버와 D1 원장 코드를 준비했습니다. 소유자가 Google 제공업체를 활성화했으며 갱신된 공개 Firebase 설정 파일을 앱에 연결했습니다. Play 앱 서명 SHA-1 등록 확인, 서버 계정 권한·비공개 런타임 설정·D1 배포와 HTTPS 주소 연결은 아직 필요합니다. 기본 서버 주소는 비어 있으며 실제 구매는 비활성 상태입니다. [Firebase 연결](FIREBASE_CONNECT.md)과 [서버 구성](../server/README.md)을 참고합니다.
+**이 저장소의 코드만으로 서버가 배포되지는 않습니다.** Firebase Google 로그인과 계정별 구매 권한 분리, Worker HTTP 서버와 D1 원장 코드를 준비했습니다. Google 제공업체 활성화·갱신된 공개 설정 파일 연결과 Firebase의 두 SHA-1 등록을 확인했습니다. 원래 업로드 키를 재사용한 새 Play 빌드의 실기기 로그인, 서버 계정 권한·비공개 런타임 설정·D1 배포와 HTTPS 주소 연결은 아직 필요합니다. 소유자는 Cloudflare 계정이 없어 무료 가입부터 진행합니다. 기본 서버 주소는 비어 있으며 실제 구매는 비활성 상태입니다. [Firebase 연결](FIREBASE_CONNECT.md)과 [서버 구성](../server/README.md)을 참고합니다.
 
 `server/src/play_purchase.mjs`는 공식 `ProductPurchaseV2` 응답의 상품·구매 옵션, 준비된 계정/요청 식별자, 결제 완료 상태와 수량·환불·소비 상태를 검사합니다. `google_clients.mjs`는 Firebase 토큰과 서버 전용 Google 인증을 처리하고, `worker.mjs`·`ledger.mjs`는 HTTP 경로·영구 원장·환불 반영을 구현합니다. Node24에서 `cd server && npm ci --ignore-scripts && npm test`로 검사합니다. 실제 Google 자격증명·구매 토큰으로 운영 검증한 상태는 아닙니다.
 
