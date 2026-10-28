@@ -5,6 +5,13 @@
 준비되어 있으며 기존 서버 테스트 66개와 배포 없는 번들 검사를 통과했습니다.
 실제 계정 인증·외부 데이터베이스 생성·서버 배포는 아직 하지 않았습니다.
 
+소유자가 계정 API 토큰 생성 화면을 공유했습니다. 계정 ID는 확인했고
+`CLOUDFLARE_ACCOUNT_ID` 공개 환경 설정에 기록했습니다. 화면의 사용 예시에
+토큰 전체가 포함되어 있어 해당 토큰은 Cloudflare에서 재발급/폐기 후 교체해야
+합니다. 토큰값은 기록하거나 API 요청에 사용하지 않았으며 현재 런타임에
+`CLOUDFLARE_API_TOKEN` 보안 값은 없습니다. 새 값은 보안 환경 설정으로만
+받고, 소유자는 저장 완료 여부만 채팅으로 알립니다.
+
 ## 소유자의 연결 단계
 
 1. [사용자 API 토큰](https://dash.cloudflare.com/profile/api-tokens)에서
@@ -36,6 +43,11 @@
 공개 계정 ID를 사용하고, 여러 계정이 조회되면 대상을 확인합니다. 기존
 데이터베이스나 Worker는 삭제하지 않습니다. 준비한 리소스 이름은 모두
 `soul-reader-billing`이며, 같은 이름이 이미 있으면 먼저 상태를 읽습니다.
+
+이번에 만든 것은 계정 소유 API 토큰이므로 상태 확인은
+`GET /client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/tokens/verify`를 사용합니다.
+사용자 토큰 확인 경로의 실패만으로 계정 토큰이 잘못되었다고 판단하지
+않습니다. 인증 헤더는 지정된 Cloudflare API 도메인으로만 전송합니다.
 
 기존 Wrangler 4.153.0과 `server/wrangler.example.jsonc`를 사용해 D1 생성,
 `server/migrations/0001_billing.sql` 적용, 실제 D1 바인딩을 포함하는 배포
