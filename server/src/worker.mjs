@@ -1,6 +1,7 @@
 import { FirebaseTokenAuthenticator, GooglePlayPublisherClient, GoogleClientFailure } from './google_clients.mjs';
 import { PLAY_PURCHASE_CATALOG, normalizePlayPurchaseV2, PlayPurchaseValidationError } from './play_purchase.mjs';
 import { BillingLedger, BillingServerFailure, fail, publicGrant, secretKey, tokenHash } from './ledger.mjs';
+import { SETUP_PAGE, SETUP_CSP } from './setup_page.mjs';
 
 const PACKAGE = 'com.soulreader.soul_reader';
 // Conservative free-Worker bound, including D1 operations and one OAuth refresh
@@ -13,6 +14,33 @@ const json = (value, status = 200) => new Response(JSON.stringify(value), { stat
   'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store',
   'X-Content-Type-Options': 'nosniff',
 } });
+
+// Public health diagnostics expose only fixed booleans. These constructors
+// validate static configuration without importing a private key or fetching.
+function configurationChecks(env) {
+  const checks = { serviceAccount: false, accountHmacKey: false,
+    tokenEncryptionKey: false, database: false, project: false };
+  if (!record(env)) return checks;
+  try {
+    if (typeof env.GOOGLE_SERVICE_ACCOUNT_JSON === 'string') {
+      const serviceAccount = JSON.parse(env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      new GooglePlayPublisherClient({ serviceAccount, packageName: PACKAGE });
+      checks.serviceAccount = true;
+    }
+  } catch { /* Keep configuration contents and parser errors private. */ }
+  try { secretKey(env.ACCOUNT_HMAC_KEY); checks.accountHmacKey = true; } catch { /* Boolean only. */ }
+  try { secretKey(env.TOKEN_ENCRYPTION_KEY); checks.tokenEncryptionKey = true; } catch { /* Boolean only. */ }
+  try { checks.database = typeof env.DB?.prepare === 'function' && typeof env.DB?.batch === 'function'; }
+  catch { /* Boolean only. */ }
+  try {
+    const projectId = env.FIREBASE_PROJECT_ID ?? 'soul-reader-a91f5';
+    if (/^[a-z][a-z0-9-]{4,62}$/.test(projectId) && (env.PLAY_PACKAGE_NAME ?? PACKAGE) === PACKAGE) {
+      new FirebaseTokenAuthenticator({ projectId });
+      checks.project = true;
+    }
+  } catch { /* Boolean only. */ }
+  return checks;
+}
 
 async function body(request, allowed) {
   if (!request.headers.get('content-type')?.toLowerCase().startsWith('application/json')) fail('invalid_request');
@@ -205,11 +233,25 @@ export function createBillingWorker({ clock = Date.now, authenticateFactory, pub
       ? await rt.ledger.encodeCursor(userId, revision, selected.at(-1).entitlement_id, pageSize) : null };
   }
   async function fetch(request, env) {
+    let healthRuntimeFailed = false;
     try {
       const url = new URL(request.url);
       if (url.protocol !== 'https:') fail('invalid_request');
+      if (request.method === 'GET' && url.pathname === '/setup/service-account' && !url.search) {
+        // This page only reads a user-selected file in that user's browser.
+        // It submits no file content and works before runtime secrets are valid.
+        return new Response(SETUP_PAGE, { headers: {
+          'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
+          'Content-Security-Policy': SETUP_CSP, 'Referrer-Policy': 'no-referrer',
+          'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY',
+          'Permissions-Policy': 'clipboard-write=(self)',
+        } });
+      }
+      const health = request.method === 'GET' && url.pathname === '/health' && !url.search;
+      healthRuntimeFailed = health;
       const rt = runtime(env);
-      if (request.method === 'GET' && url.pathname === '/health' && !url.search) return json({ status: 'configured' });
+      healthRuntimeFailed = false;
+      if (health) return json({ status: 'configured' });
       const route = url.pathname;
       const topicMatch = /^\/v1\/billing\/entitlements\/([A-Za-z0-9_-]{43})\/topic$/.exec(route);
       if (!['/v1/billing/prepare', '/v1/billing/verify', '/v1/billing/entitlements'].includes(route) && !topicMatch) fail('not_found', 404);
@@ -251,11 +293,12 @@ export function createBillingWorker({ clock = Date.now, authenticateFactory, pub
       }
       fail('invalid_request');
     } catch (error) {
+      const diagnostic = healthRuntimeFailed ? { checks: configurationChecks(env) } : {};
       if (error instanceof BillingServerFailure || error instanceof GoogleClientFailure) {
-        return json({ error: { code: error.code } }, error.status);
+        return json({ error: { code: error.code }, ...diagnostic }, error.status);
       }
       // No receipts, authorization headers, Google error bodies or SQL errors in logs/responses.
-      return json({ error: { code: 'billing_storage_failed' } }, 503);
+      return json({ error: { code: 'billing_storage_failed' }, ...diagnostic }, 503);
     }
   }
   async function scheduled(_event, env) {

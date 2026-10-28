@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createBillingWorker } from '../src/worker.mjs';
 import { BillingLedger, tokenHash, DAY_MS } from '../src/ledger.mjs';
-import { GoogleClientFailure } from '../src/google_clients.mjs';
+import { FirebaseTokenAuthenticator, GooglePlayPublisherClient, GoogleClientFailure } from '../src/google_clients.mjs';
 import { SqliteD1 } from './sqlite_d1.mjs';
 
 const NOW = Date.UTC(2026, 9, 27, 12);
@@ -131,6 +131,108 @@ test('missing runtime configuration and authentication fail closed without upstr
   assert.equal(noAuth.status, 401);
   assert.equal(s.calls.get, 0);
   assert.equal(noAuth.headers.get('cache-control'), 'no-store');
+});
+
+test('failed health identifies static configuration with booleans and keeps fixture contents private', async t => {
+  const s = setup(t);
+  const account = { type: 'service_account', client_email: 'health-private-fixture@private-project.iam.gserviceaccount.com',
+    private_key: '-----BEGIN PRIVATE KEY-----\nhealth-private-key-fixture\n-----END PRIVATE KEY-----',
+    privateFixtureField: 'health-private-field-fixture' };
+  const env = { ...s.env, GOOGLE_SERVICE_ACCOUNT_JSON: JSON.stringify(account) };
+  let upstreamCalls = 0;
+  const noUpstream = async () => { upstreamCalls++; throw new Error('health-upstream-private-fixture'); };
+  const worker = createBillingWorker({ clock: () => NOW,
+    authenticateFactory: options => new FirebaseTokenAuthenticator({ ...options, fetchImpl: noUpstream }),
+    publisherFactory: options => new GooglePlayPublisherClient({ ...options, fetchImpl: noUpstream }) });
+  const healthy = { serviceAccount: true, accountHmacKey: true, tokenEncryptionKey: true, database: true, project: true };
+  for (const [name, overrides, failed, code = 'configuration_required'] of [
+    ['malformed account JSON', { GOOGLE_SERVICE_ACCOUNT_JSON: '{"private_key":"health-json-private-fixture' }, 'serviceAccount'],
+    ['missing account', { GOOGLE_SERVICE_ACCOUNT_JSON: undefined }, 'serviceAccount'],
+    ['account is an array', { GOOGLE_SERVICE_ACCOUNT_JSON: '[]' }, 'serviceAccount'],
+    ['invalid account type', { GOOGLE_SERVICE_ACCOUNT_JSON: JSON.stringify({ ...account, type: 'wrong' }) }, 'serviceAccount'],
+    ['invalid account email', { GOOGLE_SERVICE_ACCOUNT_JSON: JSON.stringify({ ...account, client_email: 'health-email-private-fixture' }) }, 'serviceAccount', 'google_configuration_required'],
+    ['invalid account key shape', { GOOGLE_SERVICE_ACCOUNT_JSON: JSON.stringify({ ...account, private_key: 'health-key-private-fixture' }) }, 'serviceAccount', 'google_configuration_required'],
+    ['missing HMAC key', { ACCOUNT_HMAC_KEY: undefined }, 'accountHmacKey'],
+    ['noncanonical HMAC key', { ACCOUNT_HMAC_KEY: env.ACCOUNT_HMAC_KEY.slice(0, -1) }, 'accountHmacKey'],
+    ['missing encryption key', { TOKEN_ENCRYPTION_KEY: undefined }, 'tokenEncryptionKey'],
+    ['invalid encryption key', { TOKEN_ENCRYPTION_KEY: 'health-encryption-private-fixture' }, 'tokenEncryptionKey'],
+    ['missing database', { DB: undefined }, 'database'],
+    ['missing database batch', { DB: { prepare() {} } }, 'database'],
+    ['invalid project', { FIREBASE_PROJECT_ID: 'health_project_private_fixture' }, 'project'],
+    ['wrong package', { PLAY_PACKAGE_NAME: 'health.package.private.fixture' }, 'project'],
+  ]) {
+    await t.test(name, async () => {
+      const response = await worker.fetch(new Request('https://billing.example/health'), { ...env, ...overrides });
+      const text = await response.text();
+      assert.equal(response.status, 503);
+      assert.deepEqual(JSON.parse(text), { error: { code }, checks: { ...healthy, [failed]: false } });
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+      for (const fixture of [env.GOOGLE_SERVICE_ACCOUNT_JSON, account.client_email, account.private_key,
+        account.privateFixtureField, env.ACCOUNT_HMAC_KEY, env.TOKEN_ENCRYPTION_KEY,
+        'health-json-private-fixture', 'health-email-private-fixture', 'health-key-private-fixture',
+        'health-encryption-private-fixture', 'health_project_private_fixture', 'health.package.private.fixture']) {
+        assert.equal(text.includes(fixture), false);
+      }
+    });
+  }
+  const configured = await worker.fetch(new Request('https://billing.example/health'), env);
+  assert.equal(configured.status, 200);
+  assert.deepEqual(await configured.json(), { status: 'configured' });
+  assert.equal(upstreamCalls, 0);
+  assert.equal(s.calls.sql, 0);
+});
+
+test('health diagnostics stay confined to runtime failures on exact HTTPS GET health', async t => {
+  const s = setup(t);
+  for (const [path, method] of [['/v1/billing/entitlements', 'GET'], ['/health?debug=true', 'GET'], ['/health', 'POST']]) {
+    const response = await s.worker.fetch(new Request(`https://billing.example${path}`, { method }), {});
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: { code: 'configuration_required' } });
+  }
+  const insecure = await s.worker.fetch(new Request('http://billing.example/health'), {});
+  assert.equal(insecure.status, 400);
+  assert.deepEqual(await insecure.json(), { error: { code: 'invalid_request' } });
+  const missing = await s.worker.fetch(new Request('https://billing.example/health'), {});
+  assert.equal(missing.status, 503);
+  assert.deepEqual(await missing.json(), { error: { code: 'configuration_required' },
+    checks: { serviceAccount: false, accountHmacKey: false, tokenEncryptionKey: false, database: false, project: true } });
+});
+
+test('unexpected health constructor errors retain their safe envelope without exception contents', async t => {
+  const s = setup(t);
+  const worker = createBillingWorker({ authenticateFactory: () => { throw new Error('health-constructor-private-fixture'); } });
+  const env = { ...s.env, GOOGLE_SERVICE_ACCOUNT_JSON: JSON.stringify({ type: 'service_account',
+    client_email: 'health-private-fixture@private-project.iam.gserviceaccount.com',
+    private_key: '-----BEGIN PRIVATE KEY-----\nhealth-private-key-fixture\n-----END PRIVATE KEY-----' }) };
+  const response = await worker.fetch(new Request('https://billing.example/health'), env);
+  const text = await response.text();
+  assert.equal(response.status, 503);
+  assert.deepEqual(JSON.parse(text), { error: { code: 'billing_storage_failed' },
+    checks: { serviceAccount: true, accountHmacKey: true, tokenEncryptionKey: true, database: true, project: true } });
+  assert.equal(text.includes('health-constructor-private-fixture'), false);
+  const other = await worker.fetch(new Request('https://billing.example/v1/billing/entitlements'), env);
+  assert.deepEqual(await other.json(), { error: { code: 'billing_storage_failed' } });
+});
+
+test('local-file setup page works without runtime configuration and cannot upload or expose secrets', async () => {
+  const worker = createBillingWorker({ authenticateFactory: () => { throw new Error('must-not-construct-runtime'); } });
+  const response = await worker.fetch(new Request('https://billing.example/setup/service-account'),
+    new Proxy({}, { get() { throw new Error('must-not-read-environment'); } }));
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /type="file"/);
+  assert.match(html, /JSON 내용 복사/);
+  assert.match(response.headers.get('content-security-policy'), /connect-src 'none'/);
+  assert.match(response.headers.get('content-security-policy'), /form-action 'none'/);
+  assert.match(response.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.equal(response.headers.get('x-frame-options'), 'DENY');
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  const upload = await worker.fetch(new Request('https://billing.example/setup/service-account', {
+    method: 'POST', body: 'private-file-fixture-not-an-upload-route',
+  }), {});
+  assert.equal(upload.status, 503);
+  assert.equal((await upload.text()).includes('private-file-fixture'), false);
 });
 
 test('purchase is encrypted and durable with finalization job before Google ACK; duplicate replay returns same grant', async t => {
