@@ -35,9 +35,13 @@ async function probe(check) {
     const body = await readJson(response);
     const noStore = /(?:^|,)\s*no-store\s*(?:,|$)/i.test(response.headers.get('cache-control') ?? '');
     const valid = response.status === check.status && check.valid(body) && noStore;
-    const knownCode = ['configuration_required', 'authentication_required', 'internal_error']
+    const knownCode = ['configuration_required', 'google_configuration_required', 'billing_storage_failed',
+      'authentication_required', 'internal_error']
       .includes(body?.error?.code) ? `; code=${body.error.code}` : '';
-    return { valid, outcome: `${check.path} HTTP ${response.status}; expected body/cache: ${valid ? 'PASS' : 'FAIL'}${knownCode}` };
+    const diagnosticNames = ['serviceAccount', 'accountHmacKey', 'tokenEncryptionKey', 'database', 'project'];
+    const diagnostics = !valid && diagnosticNames.every(name => typeof body?.checks?.[name] === 'boolean')
+      ? `; checks: ${diagnosticNames.map(name => `${name}=${body.checks[name]}`).join(', ')}` : '';
+    return { valid, outcome: `${check.path} HTTP ${response.status}; expected body/cache: ${valid ? 'PASS' : 'FAIL'}${knownCode}${diagnostics}` };
   } catch {
     return { valid: false, outcome: `${check.path} request unavailable` };
   }
@@ -45,13 +49,13 @@ async function probe(check) {
 
 let passed = false;
 let finalResults = [];
-for (let attempt = 1; attempt <= 4; attempt++) {
+for (let attempt = 1; attempt <= 6; attempt++) {
   const results = await Promise.all(checks.map(probe));
   finalResults = results;
   console.log(`Public Worker check ${attempt}: ${ORIGIN}`);
   for (const result of results) console.log(result.outcome);
   if (results.every(result => result.valid)) { passed = true; break; }
-  if (attempt < 4) await delay(2000);
+  if (attempt < 6) await delay(5000);
 }
 if (!passed) {
   for (const result of finalResults.filter(result => !result.valid)) {
