@@ -35,18 +35,27 @@ async function probe(check) {
     const body = await readJson(response);
     const noStore = /(?:^|,)\s*no-store\s*(?:,|$)/i.test(response.headers.get('cache-control') ?? '');
     const valid = response.status === check.status && check.valid(body) && noStore;
-    return { valid, outcome: `${check.path} HTTP ${response.status}; expected body/cache: ${valid ? 'PASS' : 'FAIL'}` };
+    const knownCode = ['configuration_required', 'authentication_required', 'internal_error']
+      .includes(body?.error?.code) ? `; code=${body.error.code}` : '';
+    return { valid, outcome: `${check.path} HTTP ${response.status}; expected body/cache: ${valid ? 'PASS' : 'FAIL'}${knownCode}` };
   } catch {
     return { valid: false, outcome: `${check.path} request unavailable` };
   }
 }
 
 let passed = false;
+let finalResults = [];
 for (let attempt = 1; attempt <= 4; attempt++) {
   const results = await Promise.all(checks.map(probe));
+  finalResults = results;
   console.log(`Public Worker check ${attempt}: ${ORIGIN}`);
   for (const result of results) console.log(result.outcome);
   if (results.every(result => result.valid)) { passed = true; break; }
   if (attempt < 4) await delay(2000);
 }
-if (!passed) process.exitCode = 1;
+if (!passed) {
+  for (const result of finalResults.filter(result => !result.valid)) {
+    console.error(`::error title=Public Worker readiness::${result.outcome}`);
+  }
+  process.exitCode = 1;
+}
