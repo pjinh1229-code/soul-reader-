@@ -5,6 +5,10 @@ Firebase Google-account authentication, Google Play verification, acknowledgemen
 retries and refund reconciliation. **It has not been deployed or tested against
 a real Play purchase.** The example creates no account, database or paid service.
 
+Cloudflare deploys the backend from `main/server`; Android auth/billing work
+remains on `feat/play-billing-8.5.6`. See [deployment instructions](DEPLOY.md) for
+the creation form's commands when it has no branch/root directory controls.
+
 Use Node24 or newer (the tests use the real built-in SQLite engine):
 
 ```sh
@@ -53,8 +57,9 @@ configuration construction only; it is not a live Google API or migration check.
 The app uses `POST /v1/billing/prepare`, `POST /v1/billing/verify`,
 `GET /v1/billing/entitlements` and
 `POST /v1/billing/entitlements/{id}/topic`.
-See [the API contract](../docs/PLAY_BILLING_SETUP.md) and
-[Firebase connection steps](../docs/FIREBASE_CONNECT.md).
+See [the app/API contract](https://github.com/pjinh1229-code/soul-reader-/blob/feat/play-billing-8.5.6/docs/PLAY_BILLING_SETUP.md)
+and [Firebase connection steps](https://github.com/pjinh1229-code/soul-reader-/blob/feat/play-billing-8.5.6/docs/FIREBASE_CONNECT.md)
+on the Android development branch.
 
 Tokens are hashed for uniqueness and encrypted with AES-GCM at rest. Immutable
 prepared intents bind user, request, reading and SKU; each token and intent can

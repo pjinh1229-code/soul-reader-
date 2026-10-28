@@ -32,12 +32,18 @@ Cloudflare 목록에서 폐기합니다. 토큰값을 코드나 API 요청에 �
 | 항목 | 값 |
 | --- | --- |
 | 저장소 | `pjinh1229-code/soul-reader-` |
-| 브랜치 | `feat/play-billing-8.5.6` |
+| 브랜치 | `main` (초기 생성 화면의 기본 브랜치) |
 | Worker 이름 | `soul-reader-billing` |
-| Root directory | `server` |
-| Build command | `npm test` |
-| Deploy command (첫 업로드) | `npx wrangler deploy --config wrangler.jsonc` |
-| Node | `server/.node-version`의 24 |
+| Root directory | 저장소 루트 `/` (기본값) |
+| Build command | `cd server && npm ci --include=dev --ignore-scripts --no-fund && npm test` |
+| Deploy command (첫 업로드) | `cd server && npx --no-install wrangler deploy --config wrangler.jsonc` |
+| 미리보기 빌드 | 끔 |
+| Node | 루트 `.node-version`의 24 |
+
+소유자의 실제 생성 화면에는 브랜치·루트 디렉터리 입력이 없어 기본 브랜치의
+서버 폴더를 배포하도록 준비했습니다. `main`에는 검증한 `server/`와 Node
+선택·서버 CI만 추가하고 기존 Android 앱 파일을 보존합니다. Android 로그인
+코드와 다음 Play AAB 작업은 계속 `feat/play-billing-8.5.6`에서 진행합니다.
 
 Cloudflare가 생성하는 기본 빌드용 토큰에는 D1 권한이 포함되지 않습니다.
 **My Profile → API Tokens**에서 해당 Cloudflare 보관 사용자 토큰에 대상
@@ -50,7 +56,7 @@ Cloudflare가 생성하는 기본 빌드용 토큰에는 D1 권한이 포함되�
 **Worker → Settings → Builds → Deploy command**를 아래처럼 바꿔 재실행합니다.
 
 ```sh
-npx wrangler d1 migrations apply DB --remote --config wrangler.jsonc && npx wrangler deploy --config wrangler.jsonc
+cd server && npx --no-install wrangler d1 migrations apply DB --remote --config wrangler.jsonc && npx --no-install wrangler deploy --config wrangler.jsonc
 ```
 
 D1 콘솔에 원시 SQL을 넣는 방식과 Wrangler 마이그레이션을 혼용하면
