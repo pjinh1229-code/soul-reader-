@@ -64,3 +64,11 @@ Wrangler preserves runtime secrets during the subsequent Worker deployment.
 Successful initialization establishes configuration only; live Google API
 permissions, sign-in, purchases, refunds, and Worker CPU capacity require their
 own checks. Never add private JSON or API token values to GitHub or build logs.
+
+The owner's public origin is
+`https://soul-reader-billing.jgw98541706.workers.dev`. Run
+`node server/scripts/check-deployed-worker.mjs` from the repository root to check
+`/health` configuration and the unauthenticated entitlement boundary. The
+`Check deployed billing Worker` GitHub workflow runs these read-only checks from
+an external runner, including after successful production Workers Builds. These
+checks send no token and cannot establish live Google Play purchase permissions.
