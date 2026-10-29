@@ -19,6 +19,8 @@ jobs:
           SOUL_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.SOUL_UPLOAD_KEYSTORE_PASSWORD }}
           SOUL_UPLOAD_KEY_ALIAS: ${{ secrets.SOUL_UPLOAD_KEY_ALIAS }}
           SOUL_UPLOAD_KEY_PASSWORD: ${{ secrets.SOUL_UPLOAD_KEY_PASSWORD }}
+          SOUL_UPLOAD_RECOVERY_ARCHIVE_BASE64: ${{ secrets.SOUL_UPLOAD_RECOVERY_ARCHIVE_BASE64 }}
+          SOUL_UPLOAD_RECOVERY_PASSWORD: ${{ secrets.SOUL_UPLOAD_RECOVERY_PASSWORD }}
         run: |
           python3 - <<'PY'
           import os
@@ -30,10 +32,12 @@ jobs:
               'SOUL_UPLOAD_KEY_ALIAS',
               'SOUL_UPLOAD_KEY_PASSWORD',
           )
-          missing = [name for name in required if not os.environ.get(name)]
+          recovery = ('SOUL_UPLOAD_RECOVERY_ARCHIVE_BASE64', 'SOUL_UPLOAD_RECOVERY_PASSWORD')
+          selected = required if any(os.environ.get(name) for name in required) else recovery
+          missing = [name for name in selected if not os.environ.get(name)]
           for name in missing:
               print('::error title=Upload signing setup::Missing repository secret: ' + name)
           if missing:
               sys.exit(1)
-          print('All four existing signing secret bindings are present. Values were not printed.')
+          print('A complete owner signing route is present. Values were not printed; key validation is still required.')
           PY
