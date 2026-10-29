@@ -101,7 +101,7 @@ test('Firebase fetches only the fixed bounded Google JWKS endpoint and coalesces
     fetchImpl: async (url, init) => {
       fetches++;
       assert.equal(url, KEYS_URL);
-      assert.equal(init.redirect, 'error');
+      assert.equal(init.redirect, 'manual');
       assert(init.signal instanceof AbortSignal);
       await Promise.resolve();
       return json({ keys: [publicJwk] });
@@ -153,7 +153,7 @@ test('Publisher OAuth assertion is correctly signed, scoped and cached; purchase
   const calls = [];
   const client = publisher(async (url, init) => {
     calls.push([url, init]);
-    assert.equal(init.redirect, 'error');
+    assert.equal(init.redirect, 'manual');
     assert(init.signal instanceof AbortSignal);
     if (url === TOKEN_URL) {
       const body = new URLSearchParams(init.body);

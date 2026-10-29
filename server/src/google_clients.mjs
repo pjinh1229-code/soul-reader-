@@ -40,7 +40,8 @@ async function safeFetch(fetchImpl, url, init, unavailableCode = 'play_unavailab
   try {
     const response = await fetchImpl(url, {
       ...init,
-      redirect: 'error',
+      // Workers supports manual redirects; reject every 3xx below without following.
+      redirect: 'manual',
       signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
     });
     if (!(response instanceof Response) || response.redirected
