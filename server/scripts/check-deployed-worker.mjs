@@ -7,6 +7,8 @@ const setupOnly = process.argv.includes('--setup-only');
 const checks = setupOnly ? [
   { path: '/setup/service-account', format: 'html', status: 200,
     valid: text => typeof text === 'string' && text.includes('id="json-file"') && text.includes('id="copy-value"') },
+  { path: '/setup/upload-key', format: 'html', status: 200,
+    valid: text => typeof text === 'string' && text.includes('id="backup-file"') && text.includes('id="copy-backup"') },
 ] : [
   { path: '/health', status: 200, valid: body => body?.status === 'configured' },
   { path: '/v1/billing/entitlements', status: 401,
