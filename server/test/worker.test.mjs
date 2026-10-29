@@ -177,9 +177,10 @@ test('failed health identifies static configuration with booleans and keeps fixt
   }
   const configured = await worker.fetch(new Request('https://billing.example/health'), env);
   assert.equal(configured.status, 200);
-  assert.deepEqual(await configured.json(), { status: 'configured' });
+  assert.deepEqual(await configured.json(), { status: 'configured',
+    operational: { databaseSchema: true, lastFailures: [] } });
   assert.equal(upstreamCalls, 0);
-  assert.equal(s.calls.sql, 0);
+  assert.ok(s.calls.sql > 0);
 });
 
 test('health diagnostics stay confined to runtime failures on exact HTTPS GET health', async t => {
@@ -196,6 +197,75 @@ test('health diagnostics stay confined to runtime failures on exact HTTPS GET he
   assert.equal(missing.status, 503);
   assert.deepEqual(await missing.json(), { error: { code: 'configuration_required' },
     checks: { serviceAccount: false, accountHmacKey: false, tokenEncryptionKey: false, database: false, project: true } });
+});
+
+test('health fails storage readiness for an unmigrated database without returning exception contents', async t => {
+  const s = setup(t);
+  const db = new SqliteD1(':memory:', { migrate: false });
+  t.after(() => db.close());
+  const response = await s.worker.fetch(new Request('https://billing.example/health'), { ...s.env, DB: db });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: { code: 'billing_storage_failed' },
+    operational: { databaseSchema: false, lastFailures: [] } });
+});
+
+test('post-login auth failure retains only a fixed route stage code and status', async t => {
+  const s = setup(t);
+  const worker = createBillingWorker({ clock: () => NOW,
+    authenticateFactory: () => ({ authenticate: async () => {
+      throw new GoogleClientFailure('authentication_invalid', { status: 401 });
+    } }), publisherFactory: () => s.publisher });
+  const response = await worker.fetch(new Request('https://billing.example/v1/billing/entitlements', {
+    headers: { authorization: 'Bearer privateheader.privatepayload.privatesignature' },
+  }), s.env);
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: { code: 'authentication_invalid' } });
+  const health = await worker.fetch(new Request('https://billing.example/health'), s.env);
+  assert.deepEqual(await health.json(), { status: 'configured', operational: {
+    databaseSchema: true, lastFailures: [{ route: 'entitlements', stage: 'authentication',
+      code: 'authentication_invalid', status: 401 }],
+  } });
+  const stored = JSON.stringify(await s.db.prepare('SELECT * FROM operational_failures').all());
+  for (const privateText of ['privateheader', 'privatepayload', 'privatesignature']) {
+    assert.equal(stored.includes(privateText), false);
+  }
+});
+
+test('unauthenticated public probes do not populate operational failure metadata', async t => {
+  const s = setup(t);
+  const response = await s.worker.fetch(new Request('https://billing.example/v1/billing/entitlements'), s.env);
+  assert.equal(response.status, 401);
+  const health = await s.worker.fetch(new Request('https://billing.example/health'), s.env);
+  assert.deepEqual((await health.json()).operational, { databaseSchema: true, lastFailures: [] });
+});
+
+test('empty post-login ledger failure is safely diagnosed and no purchase is granted', async t => {
+  const s = setup(t);
+  const prepare = s.db.prepare.bind(s.db);
+  s.db.prepare = sql => {
+    if (sql === 'SELECT * FROM refund_sync WHERE singleton=1') {
+      throw new Error('private-database-error-with-receipt-and-account-fixture');
+    }
+    return prepare(sql);
+  };
+  const worker = createBillingWorker({ clock: () => NOW,
+    authenticateFactory: () => ({ authenticate: async () => ({
+      uid: 'private-account-fixture', userId: `${PROJECT}:private-account-fixture`, projectId: PROJECT,
+    }) }), publisherFactory: () => s.publisher });
+  const response = await worker.fetch(new Request('https://billing.example/v1/billing/entitlements', {
+    headers: { authorization: 'Bearer privateheader.privatepayload.privatesignature' },
+  }), s.env);
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: { code: 'billing_storage_failed' } });
+  const health = await worker.fetch(new Request('https://billing.example/health'), s.env);
+  const text = await health.text();
+  assert.deepEqual(JSON.parse(text).operational, { databaseSchema: true,
+    lastFailures: [{ route: 'entitlements', stage: 'ledger', code: 'billing_storage_failed', status: 503 }] });
+  for (const privateText of ['private-account-fixture', 'private-database-error', 'privateheader', 'privatepayload']) {
+    assert.equal(text.includes(privateText), false);
+  }
+  assert.equal(await prepare('SELECT COUNT(*) AS count FROM purchases').first('count'), 0);
+  assert.equal(s.calls.get, 0);
 });
 
 test('unexpected health constructor errors retain their safe envelope without exception contents', async t => {

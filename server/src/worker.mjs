@@ -3,6 +3,7 @@ import { PLAY_PURCHASE_CATALOG, normalizePlayPurchaseV2, PlayPurchaseValidationE
 import { BillingLedger, BillingServerFailure, fail, publicGrant, secretKey, tokenHash } from './ledger.mjs';
 import { SETUP_PAGE, SETUP_CSP } from './setup_page.mjs';
 import { UPLOAD_RECOVERY_PAGE, UPLOAD_RECOVERY_CSP } from './upload_recovery_page.mjs';
+import { readOperationalDiagnostics, recordOperationalFailure } from './operational_diagnostics.mjs';
 
 const PACKAGE = 'com.soulreader.soul_reader';
 // Conservative free-Worker bound, including D1 operations and one OAuth refresh
@@ -235,6 +236,9 @@ export function createBillingWorker({ clock = Date.now, authenticateFactory, pub
   }
   async function fetch(request, env) {
     let healthRuntimeFailed = false;
+    let failureRoute = null;
+    let failureStage = null;
+    let observeFailure = false;
     try {
       const url = new URL(request.url);
       if (url.protocol !== 'https:') fail('invalid_request');
@@ -253,21 +257,36 @@ export function createBillingWorker({ clock = Date.now, authenticateFactory, pub
       healthRuntimeFailed = health;
       const rt = runtime(env);
       healthRuntimeFailed = false;
-      if (health) return json({ status: 'configured' });
+      if (health) {
+        const operational = await readOperationalDiagnostics(env, clock());
+        return operational.databaseSchema
+          ? json({ status: 'configured', operational })
+          : json({ error: { code: 'billing_storage_failed' }, operational }, 503);
+      }
       const route = url.pathname;
       const topicMatch = /^\/v1\/billing\/entitlements\/([A-Za-z0-9_-]{43})\/topic$/.exec(route);
       if (!['/v1/billing/prepare', '/v1/billing/verify', '/v1/billing/entitlements'].includes(route) && !topicMatch) fail('not_found', 404);
-      const account = await rt.auth.authenticate(request.headers.get('authorization'));
+      failureRoute = topicMatch ? 'topic' : route.split('/').at(-1);
+      failureStage = 'authentication';
+      const authorization = request.headers.get('authorization');
+      // Only a fixed outcome is retained. Header/token contents never enter diagnostics.
+      observeFailure = typeof authorization === 'string' && authorization.length <= 16384
+        && /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/i.test(authorization);
+      const account = await rt.auth.authenticate(authorization);
       if (!record(account) || typeof account.uid !== 'string' || !account.uid || account.uid.length > 128
         || account.projectId !== rt.projectId || account.userId !== `${rt.projectId}:${account.uid}`) fail('authentication_invalid', 401);
       const userId = account.userId;
       if (route === '/v1/billing/entitlements' && request.method === 'GET') {
+        failureStage = 'rate_limit';
         await rt.ledger.rateLimit(userId, 'list', 60);
+        failureStage = 'ledger';
         return json(await entitlements(rt, userId, url));
       }
       if (request.method !== 'POST' || url.search) fail('invalid_request');
       if (route === '/v1/billing/prepare') {
+        failureStage = 'rate_limit';
         await rt.ledger.rateLimit(userId, 'prepare', 30);
+        failureStage = 'ledger';
         const value = await body(request, ['requestId', 'readingId', 'offerKey', 'productId']);
         if (!identity(value.requestId) || !identity(value.readingId) || !Object.hasOwn(PLAY_PURCHASE_CATALOG, value.productId)
           || PLAY_PURCHASE_CATALOG[value.productId].offerKey !== value.offerKey) fail('invalid_purchase_context');
@@ -275,7 +294,9 @@ export function createBillingWorker({ clock = Date.now, authenticateFactory, pub
         return json({ obfuscatedAccountId: intent.account_id, obfuscatedProfileId: intent.profile_id });
       }
       if (route === '/v1/billing/verify') {
+        failureStage = 'rate_limit';
         await rt.ledger.rateLimit(userId, 'verify', 30);
+        failureStage = 'purchase_verify';
         const value = await body(request, ['platform', 'packageName', 'productId', 'purchaseToken', 'requestId', 'readingId']);
         if (value.platform !== 'android' || value.packageName !== PACKAGE || !Object.hasOwn(PLAY_PURCHASE_CATALOG, value.productId)
           || !purchaseToken(value.purchaseToken) || (value.requestId !== undefined && !identity(value.requestId))
@@ -283,7 +304,9 @@ export function createBillingWorker({ clock = Date.now, authenticateFactory, pub
         return json(await verify(rt, userId, value));
       }
       if (topicMatch) {
+        failureStage = 'rate_limit';
         await rt.ledger.rateLimit(userId, 'topic', 60);
+        failureStage = 'topic_select';
         const value = await body(request, ['topic']);
         if (!['love', 'chance', 'work', 'bond'].includes(value.topic)) fail('invalid_topic');
         const row = await rt.ledger.purchaseById(userId, topicMatch[1]);
@@ -296,7 +319,14 @@ export function createBillingWorker({ clock = Date.now, authenticateFactory, pub
       fail('invalid_request');
     } catch (error) {
       const diagnostic = healthRuntimeFailed ? { checks: configurationChecks(env) } : {};
-      if (error instanceof BillingServerFailure || error instanceof GoogleClientFailure) {
+      const expected = error instanceof BillingServerFailure || error instanceof GoogleClientFailure;
+      if (observeFailure) {
+        try {
+          await recordOperationalFailure(env, { route: failureRoute, stage: failureStage,
+            code: expected ? error.code : 'billing_storage_failed', status: expected ? error.status : 503 }, clock());
+        } catch { /* Optional diagnostics never replace a purchase/authentication outcome. */ }
+      }
+      if (expected) {
         return json({ error: { code: error.code }, ...diagnostic }, error.status);
       }
       // No receipts, authorization headers, Google error bodies or SQL errors in logs/responses.
