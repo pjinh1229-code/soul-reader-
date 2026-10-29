@@ -1,0 +1,39 @@
+name: Check existing owner upload signing
+
+on:
+  push:
+    branches: [feat/play-billing-8.5.6]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signing-bindings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check signing secret names without printing values
+        env:
+          SOUL_UPLOAD_KEYSTORE_BASE64: ${{ secrets.SOUL_UPLOAD_KEYSTORE_BASE64 }}
+          SOUL_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.SOUL_UPLOAD_KEYSTORE_PASSWORD }}
+          SOUL_UPLOAD_KEY_ALIAS: ${{ secrets.SOUL_UPLOAD_KEY_ALIAS }}
+          SOUL_UPLOAD_KEY_PASSWORD: ${{ secrets.SOUL_UPLOAD_KEY_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import sys
+
+          required = (
+              'SOUL_UPLOAD_KEYSTORE_BASE64',
+              'SOUL_UPLOAD_KEYSTORE_PASSWORD',
+              'SOUL_UPLOAD_KEY_ALIAS',
+              'SOUL_UPLOAD_KEY_PASSWORD',
+          )
+          missing = [name for name in required if not os.environ.get(name)]
+          for name in missing:
+              print('::error title=Upload signing setup::Missing repository secret: ' + name)
+          if missing:
+              sys.exit(1)
+          print('All four existing signing secret bindings are present. Values were not printed.')
+          PY
