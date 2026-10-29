@@ -1,4 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
+import { isOperationalFailure } from '../src/operational_diagnostics.mjs';
 
 // Owner-supplied public origin. These checks send no credentials and do not
 // create intents, purchases, or entitlements. Only fixed outcome codes are logged.
@@ -10,7 +11,8 @@ const checks = setupOnly ? [
   { path: '/setup/upload-key', format: 'html', status: 200,
     valid: text => typeof text === 'string' && text.includes('id="backup-file"') && text.includes('id="copy-backup"') },
 ] : [
-  { path: '/health', status: 200, valid: body => body?.status === 'configured' },
+  { path: '/health', status: 200, valid: body => body?.status === 'configured'
+    && body?.operational?.databaseSchema === true },
   { path: '/v1/billing/entitlements', status: 401,
     valid: body => body?.error?.code === 'authentication_required' },
 ];
@@ -55,7 +57,15 @@ async function probe(check) {
     const diagnosticNames = ['serviceAccount', 'accountHmacKey', 'tokenEncryptionKey', 'database', 'project'];
     const diagnostics = !valid && diagnosticNames.every(name => typeof body?.checks?.[name] === 'boolean')
       ? `; checks: ${diagnosticNames.map(name => `${name}=${body.checks[name]}`).join(', ')}` : '';
-    return { valid, outcome: `${check.path} HTTP ${response.status}; expected body/cache: ${valid ? 'PASS' : 'FAIL'}${knownCode}${diagnostics}` };
+    const operational = check.path === '/health' && typeof body?.operational?.databaseSchema === 'boolean'
+      ? body.operational : null;
+    const notices = operational ? [`databaseSchema=${operational.databaseSchema}`] : [];
+    if (operational && Array.isArray(operational.lastFailures)) {
+      for (const failure of operational.lastFailures.filter(isOperationalFailure).slice(0, 4)) {
+        notices.push(`route=${failure.route}; stage=${failure.stage}; status=${failure.status}; code=${failure.code}`);
+      }
+    }
+    return { valid, notices, outcome: `${check.path} HTTP ${response.status}; expected body/cache: ${valid ? 'PASS' : 'FAIL'}${knownCode}${diagnostics}` };
   } catch {
     return { valid: false, outcome: `${check.path} request unavailable` };
   }
@@ -63,7 +73,7 @@ async function probe(check) {
 
 let passed = false;
 let finalResults = [];
-const attempts = setupOnly ? 16 : 6;
+const attempts = setupOnly ? 16 : 12;
 for (let attempt = 1; attempt <= attempts; attempt++) {
   const results = await Promise.all(checks.map(probe));
   finalResults = results;
@@ -71,6 +81,9 @@ for (let attempt = 1; attempt <= attempts; attempt++) {
   for (const result of results) console.log(result.outcome);
   if (results.every(result => result.valid)) { passed = true; break; }
   if (attempt < attempts) await delay(5000);
+}
+for (const result of finalResults) {
+  for (const notice of result.notices ?? []) console.log(`::notice title=Billing operational diagnosis::${notice}`);
 }
 if (!passed) {
   for (const result of finalResults.filter(result => !result.valid)) {

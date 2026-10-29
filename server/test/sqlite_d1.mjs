@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 /** Real SQLite constraints/triggers/atomic batch, matching the D1 methods used here. */
 export class SqliteD1 {
@@ -7,7 +7,12 @@ export class SqliteD1 {
   constructor(path = ':memory:', { migrate = true } = {}) {
     this.#db = new DatabaseSync(path);
     this.#db.exec('PRAGMA foreign_keys=ON');
-    if (migrate) this.#db.exec(readFileSync(new URL('../migrations/0001_billing.sql', import.meta.url), 'utf8'));
+    if (migrate) {
+      const directory = new URL('../migrations/', import.meta.url);
+      for (const name of readdirSync(directory).filter(name => /^\d+_[a-z_]+\.sql$/.test(name)).sort()) {
+        this.#db.exec(readFileSync(new URL(name, directory), 'utf8'));
+      }
+    }
   }
   prepare(sql) { return new Statement(this.#db, sql); }
   async batch(statements) {
