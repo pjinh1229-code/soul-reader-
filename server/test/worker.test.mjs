@@ -235,6 +235,42 @@ test('local-file setup page works without runtime configuration and cannot uploa
   assert.equal((await upload.text()).includes('private-file-fixture'), false);
 });
 
+test('owner backup-copy page cannot read environment or accept a private file upload', async t => {
+  const worker = createBillingWorker({ authenticateFactory: () => { throw new Error('must-not-construct-runtime'); } });
+  const response = await worker.fetch(new Request('https://billing.example/setup/upload-key'),
+    new Proxy({}, { get() { throw new Error('must-not-read-environment'); } }));
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.ok(Buffer.byteLength(html) <= 16384);
+  for (const id of ['backup-file', 'copy-backup', 'password-file', 'copy-password']) {
+    assert.ok(html.includes(`id="${id}"`));
+  }
+  assert.match(html, /SOUL_UPLOAD_RECOVERY_ARCHIVE_BASE64/);
+  assert.match(html, /SOUL_UPLOAD_RECOVERY_PASSWORD/);
+  const csp = response.headers.get('content-security-policy');
+  for (const directive of ['connect-src', 'form-action', 'frame-ancestors', 'default-src']) {
+    assert.ok(csp.includes(`${directive} 'none'`));
+  }
+  const { createHash } = await import('node:crypto');
+  for (const [tag, directive] of [['script', 'script-src'], ['style', 'style-src']]) {
+    const blocks = [...html.matchAll(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'g'))];
+    assert.equal(blocks.length, 1);
+    const digest = createHash('sha256').update(blocks[0][1]).digest('base64');
+    assert.ok(csp.includes(`${directive} 'sha256-${digest}'`));
+  }
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.equal(response.headers.get('x-frame-options'), 'DENY');
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  const s = setup(t);
+  for (const path of ['/setup/upload-key', '/setup/upload-key?fixture=private-file-fixture']) {
+    const upload = await s.worker.fetch(new Request(`https://billing.example${path}`, {
+      method: 'POST', body: 'private-file-fixture-not-an-upload-route',
+    }), s.env);
+    assert.equal(upload.status, 404);
+    assert.equal((await upload.text()).includes('private-file-fixture'), false);
+  }
+});
+
 test('purchase is encrypted and durable with finalization job before Google ACK; duplicate replay returns same grant', async t => {
   const s = setup(t, { onAck: async ({ token, db }) => {
     const row = await db.prepare('SELECT * FROM purchases WHERE token_hash=?').bind(await tokenHash(token)).first();
