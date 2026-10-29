@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the first owner-signed SOUL READER AAB and write public build facts."""
+"""Verify an owner-signed SOUL READER AAB and write public build facts."""
 
 from __future__ import annotations
 
@@ -41,6 +41,22 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _version_code(value: int | str) -> int:
+    if isinstance(value, str) and re.fullmatch(r'[1-9][0-9]{0,9}', value):
+        value = int(value)
+    if type(value) is not int or not 1 <= value <= 2100000000:
+        raise BundleVerificationError('Expected version code must be an integer from 1 to 2100000000.')
+    return value
+
+
+def _certificate_sha256(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not re.fullmatch(r'[0-9a-fA-F]{64}', value):
+        raise BundleVerificationError('Expected certificate SHA-256 must contain exactly 64 hexadecimal characters.')
+    return value.lower()
+
+
 def _run(command: list[str], label: str, *, include_stderr: bool = False) -> str:
     # These tools inspect public artifacts. Do not forward CI signing passwords.
     environment = {name: os.environ[name] for name in
@@ -59,7 +75,8 @@ def _run(command: list[str], label: str, *, include_stderr: bool = False) -> str
     return output
 
 
-def validate_manifest(xml: str) -> dict:
+def validate_manifest(xml: str, expected_version_code: int = VERSION_CODE) -> dict:
+    expected_version_code = _version_code(expected_version_code)
     if '<!DOCTYPE' in xml.upper():
         raise BundleVerificationError('Manifest document types are not permitted.')
     try:
@@ -68,8 +85,8 @@ def validate_manifest(xml: str) -> dict:
         raise BundleVerificationError('Bundle manifest is not valid XML.') from None
     if manifest.tag != 'manifest' or manifest.get('package') != PACKAGE:
         raise BundleVerificationError('Bundle package does not match SOUL READER.')
-    if manifest.get(ANDROID + 'versionCode') != str(VERSION_CODE):
-        raise BundleVerificationError('Bundle version code must be 95.')
+    if manifest.get(ANDROID + 'versionCode') != str(expected_version_code):
+        raise BundleVerificationError(f'Bundle version code must be {expected_version_code}.')
     if manifest.get(ANDROID + 'versionName') != VERSION_NAME:
         raise BundleVerificationError('Bundle version name must be 8.5.6.')
     applications = manifest.findall('application')
@@ -89,7 +106,7 @@ def validate_manifest(xml: str) -> dict:
         raise BundleVerificationError('Bundle billing-client version metadata is missing or invalid.')
     return {
         'packageName': PACKAGE,
-        'versionCode': VERSION_CODE,
+        'versionCode': expected_version_code,
         'versionName': VERSION_NAME,
         'debuggable': False,
         'billingPermission': BILLING_PERMISSION,
@@ -111,8 +128,13 @@ def _certificate_der(text: str) -> bytes:
     return value
 
 
-def verify_signature(bundle: Path, certificate: Path) -> str:
+def verify_signature(bundle: Path, certificate: Path,
+                     expected_certificate_sha256: str | None = None) -> str:
+    expected_certificate_sha256 = _certificate_sha256(expected_certificate_sha256)
     expected = _certificate_der(certificate.read_text(encoding='ascii'))
+    if (expected_certificate_sha256 is not None
+            and hashlib.sha256(expected).hexdigest() != expected_certificate_sha256):
+        raise BundleVerificationError('Public upload certificate does not match the expected SHA-256.')
     verification = _run([
         'java', '-Duser.language=en', '-Duser.country=US', '-m',
         'jdk.jartool/sun.security.tools.jarsigner.Main', '-verify', '-verbose',
@@ -135,15 +157,20 @@ def verify_signature(bundle: Path, certificate: Path) -> str:
 
 
 def verify_bundle(bundle: Path, bundletool: Path, certificate: Path,
-                  project_root: Path | None = None) -> dict:
+                  project_root: Path | None = None, *,
+                  expected_version_code: int = VERSION_CODE,
+                  expected_certificate_sha256: str | None = None) -> dict:
+    expected_version_code = _version_code(expected_version_code)
+    expected_certificate_sha256 = _certificate_sha256(expected_certificate_sha256)
     if sha256_file(bundletool) != BUNDLETOOL_SHA256:
         raise BundleVerificationError('Official bundletool SHA-256 does not match the pinned release.')
     _run(['java', '-jar', str(bundletool), 'validate', '--bundle=' + str(bundle)],
          'Bundletool validation')
     xml = _run(['java', '-jar', str(bundletool), 'dump', 'manifest',
                 '--bundle=' + str(bundle), '--module=base'], 'Bundle manifest inspection')
-    info = validate_manifest(xml)
-    info['uploadCertificateSha256'] = verify_signature(bundle, certificate)
+    info = validate_manifest(xml, expected_version_code)
+    info['uploadCertificateSha256'] = verify_signature(bundle, certificate,
+                                                     expected_certificate_sha256)
     root = project_root or Path(__file__).resolve().parent.parent
     expected = verify_assets.verify_source(root)
     if len(expected) != 70 or verify_assets.verify_archive(bundle, expected) != 'AAB':
@@ -179,12 +206,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--bundletool', required=True, type=Path)
     parser.add_argument('--certificate', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--version-code', default=str(VERSION_CODE),
+                        help='Expected Android version code (default: 95).')
+    parser.add_argument('--certificate-sha256',
+                        help='Expected upload-certificate SHA-256, as 64 hexadecimal characters.')
     args = parser.parse_args(argv)
     try:
+        expected_version_code = _version_code(args.version_code)
+        expected_certificate_sha256 = _certificate_sha256(args.certificate_sha256)
         if args.output.is_symlink() or args.output.resolve() in {
                 args.bundle.resolve(), args.bundletool.resolve(), args.certificate.resolve()}:
             raise BundleVerificationError('Public report must not replace a verification input.')
-        info = verify_bundle(args.bundle, args.bundletool, args.certificate)
+        info = verify_bundle(args.bundle, args.bundletool, args.certificate,
+                             expected_version_code=expected_version_code,
+                             expected_certificate_sha256=expected_certificate_sha256)
         _write_public_report(args.output, info)
     except (BundleVerificationError, verify_assets.VerificationError) as error:
         print('First Play bundle verification failed: ' + str(error), file=sys.stderr)

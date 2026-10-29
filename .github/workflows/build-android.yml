@@ -2,11 +2,11 @@ name: Build SOUL READER 8.5.6 payment preparation APK
 
 on:
   push:
-    branches: [main, feat/play-billing-8.5.6]
+    branches: [main, feat/play-billing-8.5.6, build/internal-play-v96]
   workflow_dispatch:
     inputs:
       artifact_type:
-        description: Artifact to build (internal AAB keeps real purchases disabled)
+        description: Artifact to build (internal AAB connects the verified billing server)
         type: choice
         default: debug_apk
         options:
@@ -43,7 +43,9 @@ jobs:
         run: npx wrangler deploy --dry-run --config wrangler.example.jsonc --outdir "$RUNNER_TEMP/soul-billing-worker"
 
   android-debug-apk:
-    if: github.event_name != 'workflow_dispatch' || inputs.artifact_type != 'internal_aab'
+    if: >-
+      !(github.event_name == 'push' && github.ref == 'refs/heads/build/internal-play-v96') &&
+      (github.event_name != 'workflow_dispatch' || inputs.artifact_type != 'internal_aab')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -213,14 +215,17 @@ jobs:
           retention-days: 30
 
   android-internal-aab:
-    if: github.event_name == 'workflow_dispatch' && inputs.artifact_type == 'internal_aab'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.artifact_type == 'internal_aab') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/build/internal-play-v96')
+    needs: billing-server
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       SOUL_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.SOUL_UPLOAD_KEYSTORE_PASSWORD }}
       SOUL_UPLOAD_KEY_ALIAS: ${{ secrets.SOUL_UPLOAD_KEY_ALIAS }}
       SOUL_UPLOAD_KEY_PASSWORD: ${{ secrets.SOUL_UPLOAD_KEY_PASSWORD }}
-      SOUL_INTERNAL_VERSION_CODE: ${{ inputs.version_code }}
+      SOUL_INTERNAL_VERSION_CODE: ${{ inputs.version_code || '96' }}
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
@@ -238,8 +243,8 @@ jobs:
               if not value or any(c in value for c in '\r\n\0'):
                   raise SystemExit('Missing or invalid repository secret: ' + name)
           version = os.environ.get('SOUL_INTERNAL_VERSION_CODE', '')
-          if not re.fullmatch(r'[1-9][0-9]{0,9}', version) or int(version) > 2100000000:
-              raise SystemExit('version_code must be an integer from 1 to 2100000000')
+          if not re.fullmatch(r'[1-9][0-9]{0,9}', version) or not 96 <= int(version) <= 2100000000:
+              raise SystemExit('version_code must be an integer from 96 to 2100000000')
           try:
               raw = base64.b64decode(os.environ['SOUL_UPLOAD_KEYSTORE_BASE64'], validate=True)
           except (ValueError, binascii.Error):
@@ -259,6 +264,35 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Require the existing owner upload certificate before building
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, os, subprocess
+          from pathlib import Path
+
+          command = ['keytool', '-exportcert', '-keystore', os.environ['SOUL_UPLOAD_KEYSTORE_PATH'],
+                     '-alias', os.environ['SOUL_UPLOAD_KEY_ALIAS'],
+                     '-storepass:env', 'SOUL_UPLOAD_KEYSTORE_PASSWORD']
+          try:
+              result = subprocess.run(command, capture_output=True, timeout=30)
+          except (OSError, subprocess.SubprocessError):
+              raise SystemExit('::error::Owner upload certificate could not be inspected.') from None
+          if result.returncode or not result.stdout or len(result.stdout) > 100000:
+              raise SystemExit('::error::Existing upload key, alias or store password is unusable.')
+          expected = 'c4d31b29444fcd6fabea9ee91a01fd6bab3383a07079302e19ff32a1d7805139'
+          if hashlib.sha256(result.stdout).hexdigest() != expected:
+              raise SystemExit('::error::Upload certificate does not match the original Play upload key.')
+          pem = ('-----BEGIN CERTIFICATE-----\n' +
+                 base64.encodebytes(result.stdout).decode('ascii') +
+                 '-----END CERTIFICATE-----\n')
+          (Path(os.environ['RUNNER_TEMP']) / 'soul-owner-upload-certificate.pem').write_text(pem)
+          print('Original owner upload certificate verified. No private values printed.')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Require the deployed billing configuration and authentication boundary
+        run: node server/scripts/check-deployed-worker.mjs
       - name: Test release configuration and archive verification
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
       - name: Setup Flutter stable
@@ -278,61 +312,45 @@ jobs:
           set -euo pipefail
           flutter analyze --no-fatal-infos
           flutter test
-      - name: Build payment preparation AAB for internal testing
+      - name: Build server-connected AAB for internal billing testing
         run: |
           set -euo pipefail
-          # No verifier URL or authenticated session is configured. Purchases stay disabled.
           flutter build appbundle --release --build-number="$SOUL_INTERNAL_VERSION_CODE" \
-            --dart-define=BILLING_PACKAGE_NAME=com.soulreader.soul_reader
+            --dart-define=BILLING_PACKAGE_NAME=com.soulreader.soul_reader \
+            --dart-define=BILLING_VERIFIER_URL=https://soul-reader-billing.jgw98541706.workers.dev
+      - name: Download and verify official bundletool
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 2 \
+            https://github.com/google/bundletool/releases/download/1.18.2/bundletool-all-1.18.2.jar \
+            --output "$RUNNER_TEMP/bundletool-all-1.18.2.jar"
+          printf '%s  %s\n' '378b5434cd1378bef6b2bc527b8c7f0ff2584b273830335bce54d6d0813c8584' \
+            "$RUNNER_TEMP/bundletool-all-1.18.2.jar" | sha256sum --check -
       - name: Verify signed bundle and original audio
         run: |
           set -euo pipefail
-          bundle=build/app/outputs/bundle/release/app-release.aab
-          python3 scripts/verify_assets.py "$bundle"
-          java -Duser.language=en -Duser.country=US -m jdk.jartool/sun.security.tools.jarsigner.Main -verify -verbose -certs "$bundle" > "$RUNNER_TEMP/soul-jar-verify.log" 2>&1
-          if ! grep -q '^jar verified\.$' "$RUNNER_TEMP/soul-jar-verify.log" || grep -qi 'unsigned entries' "$RUNNER_TEMP/soul-jar-verify.log"; then
-            echo 'Bundle signature verification failed or contains unsigned entries.' >&2
-            exit 1
-          fi
-          keytool -exportcert -keystore "$SOUL_UPLOAD_KEYSTORE_PATH" -alias "$SOUL_UPLOAD_KEY_ALIAS" \
-            -storepass:env SOUL_UPLOAD_KEYSTORE_PASSWORD > "$RUNNER_TEMP/soul-upload-cert.der"
-          keytool -J-Duser.language=en -J-Duser.country=US -printcert -file "$RUNNER_TEMP/soul-upload-cert.der" > "$RUNNER_TEMP/soul-upload-cert-info.txt"
-          if grep -qi 'CN=Android Debug' "$RUNNER_TEMP/soul-upload-cert-info.txt"; then
-            echo 'Android debug certificates cannot be used for this upload.' >&2
-            exit 1
-          fi
-          keytool -printcert -jarfile "$bundle" -rfc > "$RUNNER_TEMP/soul-bundle-cert.pem"
-          python3 - <<'PY'
-          import base64, hashlib, os, re, zipfile
-          from pathlib import Path
-          temp = Path(os.environ['RUNNER_TEMP'])
-          text = (temp / 'soul-bundle-cert.pem').read_text()
-          certificates = re.findall(r'-----BEGIN CERTIFICATE-----\s*(.*?)\s*-----END CERTIFICATE-----', text, re.S)
-          if not certificates:
-              raise SystemExit('No bundle signing certificate found')
-          leaf = base64.b64decode(re.sub(r'\s+', '', certificates[0]), validate=True)
-          if leaf != (temp / 'soul-upload-cert.der').read_bytes():
-              raise SystemExit('Bundle signing certificate does not match upload key')
-          with zipfile.ZipFile('build/app/outputs/bundle/release/app-release.aab') as archive:
-              required = {'BundleConfig.pb', 'base/manifest/AndroidManifest.xml'}
-              if not required.issubset(archive.namelist()):
-                  raise SystemExit('Not an Android App Bundle')
-          print('Verified upload certificate SHA-256: ' + hashlib.sha256(leaf).hexdigest())
-          PY
+          python3 scripts/verify_first_play_bundle.py \
+            --bundle build/app/outputs/bundle/release/app-release.aab \
+            --bundletool "$RUNNER_TEMP/bundletool-all-1.18.2.jar" \
+            --certificate "$RUNNER_TEMP/soul-owner-upload-certificate.pem" \
+            --version-code "$SOUL_INTERNAL_VERSION_CODE" \
+            --certificate-sha256 c4d31b29444fcd6fabea9ee91a01fd6bab3383a07079302e19ff32a1d7805139 \
+            --output SOUL_READER_8.5.6_INTERNAL_BILLING_BUILD_INFO.json
       - name: Stage only the internal AAB and checksum
         run: |
           set -euo pipefail
-          output="SOUL_READER_8.5.6_INTERNAL_PAYMENT_PREP_${SOUL_INTERNAL_VERSION_CODE}.aab"
+          output="SOUL_READER_8.5.6_INTERNAL_BILLING_${SOUL_INTERNAL_VERSION_CODE}.aab"
           cp build/app/outputs/bundle/release/app-release.aab "$output"
           sha256sum "$output" > "${output}.sha256"
-          echo 'Internal payment-preparation AAB only. Login, backend verification and live purchases are not connected.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Internal billing test AAB: Google login and the deployed billing server are connected. Original owner upload certificate verified. Device login, test purchases and refunds still require verification.' >> "$GITHUB_STEP_SUMMARY"
       - name: Publish internal AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SOUL_READER_8.5.6_INTERNAL_PAYMENT_PREP_AAB
+          name: SOUL_READER_8.5.6_INTERNAL_BILLING_AAB
           path: |
-            SOUL_READER_8.5.6_INTERNAL_PAYMENT_PREP_*.aab
-            SOUL_READER_8.5.6_INTERNAL_PAYMENT_PREP_*.aab.sha256
+            SOUL_READER_8.5.6_INTERNAL_BILLING_*.aab
+            SOUL_READER_8.5.6_INTERNAL_BILLING_*.aab.sha256
+            SOUL_READER_8.5.6_INTERNAL_BILLING_BUILD_INFO.json
           if-no-files-found: error
           retention-days: 30
       - name: Remove private signing material
