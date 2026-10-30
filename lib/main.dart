@@ -6,8 +6,10 @@ import 'dart:ui' as ui;
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
@@ -63,6 +65,7 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
   Future<void> _billingJsQueue = Future<void>.value();
   Future<void> _billingCommandQueue = Future<void>.value();
   bool _webPageReady = false;
+  bool _legalSupportOpen = false;
   Map<String, dynamic> _billingState = {
     'status': 'unconfigured', 'configured': false,
     'storeAvailable': false, 'busy': false, 'products': <Object>[],
@@ -86,6 +89,7 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
       ..addJavaScriptChannel('PhotoPicker', onMessageReceived: _onPhotoPicker)
       ..addJavaScriptChannel('FaceScan', onMessageReceived: _onFaceRequest)
       ..addJavaScriptChannel('StoreBilling', onMessageReceived: _onBillingMessage)
+      ..addJavaScriptChannel('LegalSupport', onMessageReceived: _onLegalSupport)
       ..setNavigationDelegate(NavigationDelegate(
         onNavigationRequest: (request) {
           final uri = Uri.tryParse(request.url);
@@ -309,6 +313,87 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
       await _emitBilling({'type': 'error', 'requestId': requestId,
         'code': error is BillingAuthFailure ? error.code : error is BillingFailure ? error.code : 'billing_request_failed'},
         epoch: authError ? _billingEpoch : commandEpoch);
+    }
+  }
+
+  Future<void> _onLegalSupport(JavaScriptMessage message) async {
+    // The page sends only an action. Never launch a URL supplied by JavaScript.
+    final url = switch (message.message) {
+      'privacy' => 'https://soul-reader-billing.jgw98541706.workers.dev/privacy',
+      'deleteAccount' => 'https://soul-reader-billing.jgw98541706.workers.dev/delete-account',
+      _ => null,
+    };
+    if (!mounted || url == null || _legalSupportOpen) return;
+    _legalSupportOpen = true;
+    try {
+      try {
+        if (await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)) return;
+      } catch (_) {
+        // A missing browser must still leave the public address accessible.
+      }
+      if (!mounted) return;
+      var language = 'ko';
+      try {
+        final raw = await _web.runJavaScriptReturningResult('document.documentElement.lang');
+        final value = raw is String && raw.startsWith('"') ? jsonDecode(raw) : raw;
+        if (value == 'en' || value == 'ja') language = value as String;
+      } catch (_) {}
+      if (!mounted) return;
+      final labels = switch (language) {
+        'en' => (
+          title: 'Open in browser',
+          help: 'The browser could not open. Copy this address and open it in your browser.',
+          copy: 'Copy link', copied: 'Link copied', close: 'Close',
+        ),
+        'ja' => (
+          title: 'ブラウザで開く',
+          help: 'ブラウザを開けませんでした。このアドレスをコピーして、ブラウザで開いてください。',
+          copy: 'リンクをコピー', copied: 'コピーしました', close: '閉じる',
+        ),
+        _ => (
+          title: '브라우저에서 열기',
+          help: '브라우저를 열지 못했어요. 아래 주소를 복사해 브라우저에서 열어 주세요.',
+          copy: '링크 복사', copied: '복사했어요', close: '닫기',
+        ),
+      };
+      var copied = false;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, updateDialog) => AlertDialog(
+            title: Text(labels.title),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(labels.help),
+                const SizedBox(height: 16),
+                SelectableText(url),
+              ],
+            ),
+            actions: [
+              TextButton.icon(
+                icon: Icon(copied ? Icons.check : Icons.copy),
+                label: Text(copied ? labels.copied : labels.copy),
+                onPressed: () async {
+                  try {
+                    await Clipboard.setData(ClipboardData(text: url));
+                    if (context.mounted) updateDialog(() => copied = true);
+                  } catch (_) {
+                    // The selectable address also supports the system copy menu.
+                  }
+                },
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(labels.close),
+              ),
+            ],
+          ),
+        ),
+      );
+    } finally {
+      _legalSupportOpen = false;
     }
   }
 

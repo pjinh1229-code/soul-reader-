@@ -253,6 +253,8 @@ button,input{touch-action:manipulation}button{min-height:37px}
 <style>
 .sr85-report{margin:22px 0;padding:20px;border:1px solid #3c516a;border-radius:20px;background:#141e31;color:#e2e8f0}
 .sr85-report h2{color:#7dd3fc;font-size:20px;margin:0 0 12px}.sr85-part{padding:13px 0;border-bottom:1px solid #334155}.sr85-part b{color:#7dd3fc}.sr85-part em{float:right;font-style:normal;color:#e0f2fe}.sr85-part p,.sr85-report p{line-height:1.75;font-size:14px}.sr85-overall{margin-top:18px;padding:14px;border-radius:12px;background:#26364d}
+</style><style>
+.legal-support{display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:28px;padding:16px 0 20px;border-top:1px solid var(--line)}.legal-support button{min-height:44px;max-width:100%;padding:10px 12px;border:0;border-radius:8px;background:transparent;color:var(--gold);font-size:12px;line-height:1.6;text-align:center;text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}.legal-support button:focus-visible{outline:2px solid var(--blush);outline-offset:2px}#app>.legal-support{margin:0 22px;padding-bottom:150px}
 </style></head><body><div class="app" id="app"></div><div class="toast" id="toast" hidden></div>
 <script>
 
@@ -401,7 +403,30 @@ function gwansangView(){
  </section>${bottom()}</main>`;
 }
 const ROUTES={welcome:intro,themes:themeScreen,photo:photoView,traits:traitsView,romance,loading,result,premium,archive,gwansang:gwansangView};
-function render(){document.documentElement.lang=state.lang;document.title=`SOUL READER — ${state.lang==='ko'?'저승사자 류':state.lang==='ja'?'死神リュウ':'Meet RYU'}`;$('#app').innerHTML=(ROUTES[state.screen]||intro)();if(state.stream&&state.screen==='photo'){const video=$('#liveVideo');if(video){video.srcObject=state.stream;video.play().catch(()=>{})}}}
+function renderLegalSupport(){
+ const words={
+  ko:{title:'개인정보 및 계정',privacy:'개인정보처리방침',deleteAccount:'계정 및 데이터 삭제 요청'},
+  en:{title:'Privacy and account',privacy:'Privacy policy',deleteAccount:'Request account and data deletion'},
+  ja:{title:'プライバシーとアカウント',privacy:'プライバシーポリシー',deleteAccount:'アカウントとデータの削除をリクエスト'}
+ },text=words[state.lang]||words.ko;
+ const footer=document.createElement('nav');footer.id='legal-support';footer.className='legal-support';footer.setAttribute('aria-label',text.title);
+ footer.innerHTML=`<button type="button" data-legal-action="privacy">${text.privacy}</button><button type="button" data-legal-action="deleteAccount">${text.deleteAccount}</button>`;
+ // The home illustration keeps its framing; its footer follows the main scene.
+ // Other screens share their page's existing clearance above the bottom controls.
+ ($('#app .page')||$('#app')).append(footer);
+}
+$('#app').addEventListener('click',event=>{
+ const button=event.target.closest('[data-legal-action]');if(!button)return;
+ event.preventDefault();event.stopImmediatePropagation();
+ const action=button.dataset.legalAction;
+ const url=action==='privacy'?'https://soul-reader-billing.jgw98541706.workers.dev/privacy':action==='deleteAccount'?'https://soul-reader-billing.jgw98541706.workers.dev/delete-account':null;
+ if(!url)return;
+ // Only the allowlisted action crosses the native bridge. No reading, photo,
+ // account, location, or request-provided URL is included in either path.
+ if(typeof window.LegalSupport?.postMessage==='function'){window.LegalSupport.postMessage(action);return}
+ window.open(url,'_blank','noopener,noreferrer');
+},true);
+function render(){document.documentElement.lang=state.lang;document.title=`SOUL READER — ${state.lang==='ko'?'저승사자 류':state.lang==='ja'?'死神リュウ':'Meet RYU'}`;$('#app').innerHTML=(ROUTES[state.screen]||intro)();renderLegalSupport();if(state.stream&&state.screen==='photo'){const video=$('#liveVideo');if(video){video.srcObject=state.stream;video.play().catch(()=>{})}}}
 function goto(route){
  if(route==='romance'){state.flirtChoice=null;beginReveal();return}
  if(route==='themes'&&state.screen==='welcome'&&!state.gwansangSeenSession&&!safeGet('sr61-seen')){state.gwansangAuto=true;state.gwansangReturn='themes';route='gwansang'}

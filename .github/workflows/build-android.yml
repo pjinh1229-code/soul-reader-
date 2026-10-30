@@ -1,8 +1,8 @@
-name: Build SOUL READER 8.5.6 payment preparation APK
+name: Build SOUL READER Android
 
 on:
   push:
-    branches: [main, feat/play-billing-8.5.6, build/internal-play-v96]
+    branches: [main, feat/play-billing-8.5.6, build/play-release-v97]
   workflow_dispatch:
     inputs:
       artifact_type:
@@ -15,7 +15,7 @@ on:
       version_code:
         description: Internal AAB version code, greater than any previous Play upload
         type: string
-        default: '96'
+        default: '97'
 
 permissions:
   contents: read
@@ -44,7 +44,7 @@ jobs:
 
   android-debug-apk:
     if: >-
-      !(github.event_name == 'push' && github.ref == 'refs/heads/build/internal-play-v96') &&
+      !(github.event_name == 'push' && github.ref == 'refs/heads/build/play-release-v97') &&
       (github.event_name != 'workflow_dispatch' || inputs.artifact_type != 'internal_aab')
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -79,6 +79,7 @@ jobs:
           test -n "$CHROMIUM_PATH"
           # paid855 replaces story75/ending80 tests for the retired fiction flow.
           node tests/billing_ui.cjs
+          node tests/legal_links.cjs
           node tests/voice856.cjs
           node tests/paid855.cjs
           node tests/photo_bridge.cjs
@@ -217,12 +218,12 @@ jobs:
   android-internal-aab:
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.artifact_type == 'internal_aab') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/build/internal-play-v96')
+      (github.event_name == 'push' && github.ref == 'refs/heads/build/play-release-v97')
     needs: billing-server
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
-      SOUL_INTERNAL_VERSION_CODE: ${{ inputs.version_code || '96' }}
+      SOUL_INTERNAL_VERSION_CODE: ${{ inputs.version_code || '97' }}
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
@@ -247,6 +248,18 @@ jobs:
         run: node server/scripts/check-deployed-worker.mjs
       - name: Test release configuration and archive verification
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Test purchase, photo and legal links in Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts --prefix "$RUNNER_TEMP/legal-browser-test" playwright@1.57.0
+          export NODE_PATH="$RUNNER_TEMP/legal-browser-test/node_modules"
+          export CHROMIUM_PATH="$(command -v google-chrome || command -v chromium)"
+          test -n "$CHROMIUM_PATH"
+          node tests/billing_ui.cjs
+          node tests/photo_bridge.cjs
+          node tests/locales854.cjs
+          node tests/legal_links.cjs
       - name: Setup Flutter stable
         uses: subosito/flutter-action@v2
         with:
