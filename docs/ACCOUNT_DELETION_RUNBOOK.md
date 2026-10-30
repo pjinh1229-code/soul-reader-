@@ -1,50 +1,26 @@
-# SOUL READER account deletion requests
+# SOUL READER 계정 삭제 요청 처리 방법
 
-The public contact is `jgw98541706@gmail.com`. Requests are handled manually;
-opening the app's request instructions or composing an email does not submit or
-complete deletion. This runbook covers Firebase project `soul-reader-a91f5` and
-the D1 database `soul-reader-billing`. It does not authorize unrelated users'
-data deletion, Google-account deletion, refunds, or changes to cryptographic keys.
+공개 문의처는 `jgw98541706@gmail.com`입니다. 계정 삭제는 운영자가 요청을 확인한 뒤 직접 처리합니다. 사용자가 앱에서 안내를 열거나 이메일을 작성하는 것만으로는 요청이 접수되거나 삭제가 완료되지 않습니다.
 
-## Verify the request and stop writes
+이 문서는 Firebase 프로젝트 `soul-reader-a91f5`와 D1 데이터베이스 `soul-reader-billing`의 해당 앱 계정을 삭제하는 절차입니다. 다른 사용자의 데이터 삭제, Google 계정 자체의 삭제, 구매 환불, 암호화 키 변경은 이 절차에 포함되지 않습니다.
 
-1. Ask for the Google email used to sign into SOUL READER. Do not request a
-   password, verification code, identity document, ID token, or purchase token.
-   A sender display name or the email's From header is insufficient proof.
-2. In Firebase Console → Authentication → Users, locate that email and check
-   that it is the requested Google sign-in account in the pinned project.
-   Send a fresh confirmation message to the address registered there and require
-   a reply confirming deletion. If no matching account exists, clarify the email
-   or explain that no matching account was found; never substitute another user.
-3. Explain that the app account, server purchase rights and linked records will
-   be removed; purchases will no longer restore to that account. The user's
-   Google account and Google's own payment records are not deleted, and deletion
-   does not itself refund a purchase. Obtain the requested deletion confirmation.
-4. Copy the exact Firebase **UID**, then **disable** that Firebase user. Keep
-   it disabled through the final server checks. Revoke refresh tokens through an
-   approved existing Admin tool if one is available; this helper does not do so.
-5. Wait at least **two hours after disabling** before the final D1 deletion.
-   Firebase ID tokens normally last an hour. This is an operational buffer,
-   not a legal retention deadline or a promised response time. Our Worker checks
-   token signatures and expiration, but does not check Firebase disablement or
-   revocation on every request. Disabling/deleting a Firebase user alone therefore
-   does not immediately stop its existing ID tokens. The local helper cannot
-   verify disablement, elapsed time or token expiration. If the account was
-   reenabled, identity changed, or writes continue, stop and investigate before
-   marking deletion complete.
+## 1. 요청자를 확인하고 계정을 사용 중지하기
 
-Firebase reference: [Manage user sessions](https://firebase.google.com/docs/auth/admin/manage-sessions).
-Use Console's current disable/delete controls; do not upload service-account
-credentials or paste them into chat, SQL files or request correspondence.
+1. 사용자에게 **SOUL READER에 로그인할 때 사용한 Google 이메일 주소**를 확인합니다. 비밀번호, Google 인증번호, 신분증, ID 토큰, 구매 토큰은 요청하지 않습니다. 보낸 사람 이름이나 이메일의 발신 주소만 보고 본인이라고 판단하지 않습니다.
+2. 소유자 본인의 [Firebase Console](https://console.firebase.google.com/)에서 `soul-reader-a91f5` 프로젝트를 선택한 뒤 **Authentication → Users**를 엽니다. 해당 이메일을 찾아 Google 로그인 계정이 맞는지 확인합니다. Firebase에 등록된 이메일 주소로 새 확인 메일을 보내고, 계정 삭제를 원한다는 답장을 받습니다. 일치하는 계정이 없으면 로그인에 사용한 이메일을 다시 확인하거나, 해당 계정을 찾지 못했다고 안내합니다. 비슷한 다른 계정으로 대신 처리하지 않습니다.
+3. 앱 계정과 서버에 저장된 구매 이용 권한·관련 기록이 삭제되며, 해당 계정으로 구매 권한을 복원할 수 없게 된다고 설명합니다. **Google 계정 자체와 Google의 결제 기록은 삭제되지 않으며, 계정 삭제만으로 환불되지는 않습니다.** 사용자가 이 내용을 확인한 뒤 삭제를 요청했는지 확인합니다.
+4. Firebase의 정확한 **UID**를 복사하고 해당 사용자를 **사용 중지(Disable)** 합니다. 아래 서버 확인이 끝날 때까지 사용 중지 상태를 유지합니다. 이미 승인받아 사용 중인 관리 도구에 로그인 갱신 토큰을 취소하는 기능이 있다면 함께 처리할 수 있습니다. 이 문서의 준비 스크립트는 계정 사용 중지나 토큰 취소를 대신하지 않습니다.
+5. **사용 중지 후 최소 2시간이 지난 뒤** D1의 최종 삭제를 진행합니다. Firebase ID 토큰은 일반적으로 1시간 동안 유효합니다. 2시간은 기존 토큰이 만료되도록 기다리는 운영상 여유 시간이며, 법정 보관 기간이나 사용자에게 약속한 처리 기한이 아닙니다. 현재 Worker는 토큰의 서명과 만료 시간을 확인하지만, 요청할 때마다 Firebase 계정의 사용 중지·토큰 취소 여부를 확인하지는 않습니다. 따라서 계정을 사용 중지하거나 삭제해도 이미 발급된 토큰이 즉시 차단되지는 않습니다. 준비 스크립트는 사용 중지 여부, 실제 대기 시간, 토큰 만료를 확인할 수 없으므로 운영자가 직접 확인해야 합니다. 계정을 다시 활성화했거나, 대상 계정이 바뀌었거나, 새 기록이 계속 생긴다면 원인을 확인한 뒤 진행하고 삭제 완료로 안내하지 않습니다.
 
-## Prepare private SQL locally
+Firebase 참고 문서: [사용자 세션 관리](https://firebase.google.com/docs/auth/admin/manage-sessions).
 
-Run these commands from `server/` on the operator's trusted machine. Choose a
-private working directory **outside this checkout**. The helper uses no cloud
-credentials, makes no network requests, and never executes SQL. Its default is
-read-only counts. Generated SQL includes the target UID; do not commit, share,
-or paste it into public issue trackers. Output directories are created with mode
-0700 and files with mode 0600. Existing output directories are rejected.
+계정 사용 중지와 삭제는 Firebase Console의 현재 화면에서 직접 진행합니다. 서비스 계정 인증 파일이나 비밀 값은 채팅, SQL 파일, 사용자와 주고받는 메일에 넣지 않습니다.
+
+## 2. 본인 컴퓨터에서 확인용 SQL 파일 만들기
+
+아래 명령어는 운영자가 관리하는 신뢰할 수 있는 컴퓨터에서 실행합니다. 먼저 이 저장소의 `server/` 폴더로 이동하고, 작업 파일은 **저장소 폴더 밖**에 만듭니다. 아래 예시는 그 위치로 `/tmp`를 사용합니다. 같은 터미널에서 순서대로 진행하면 `$CASE_DIR` 변수를 계속 사용할 수 있습니다.
+
+준비 스크립트는 클라우드 인증 정보를 사용하지 않으며, 인터넷 요청이나 SQL 실행도 하지 않습니다. 기본 동작은 **삭제하지 않고 개수만 확인하는 SQL 파일 생성**입니다. 생성된 SQL에는 대상 UID가 들어가므로 Git에 올리거나 다른 사람에게 공유하거나 공개 게시판에 붙여 넣지 않습니다. 출력 폴더는 권한 0700, 파일은 0600으로 생성되어 해당 컴퓨터 사용자만 접근할 수 있습니다. 기존 폴더를 출력 위치로 지정하면 덮어쓰지 않고 중단합니다.
 
 ```bash
 umask 077
@@ -56,21 +32,18 @@ node scripts/prepare-account-deletion.mjs \
   --uid-file "$CASE_DIR/uid.txt" --output-dir "$CASE_DIR/preview"
 ```
 
-Review `preview/01-preview.sql` locally and verify its target against Firebase.
-The D1 user identifier is **`soul-reader-a91f5:UID`**, never the email or display
-name. UIDs containing SQL quotes are escaped by the helper. Do not edit the
-generated WHERE clauses. You can personally run the read-only preview with the
-repository's installed Wrangler and your existing Cloudflare authentication:
+`Firebase UID:`가 나오면 앞에서 확인한 UID를 입력합니다. 생성된 `preview/01-preview.sql` 파일을 본인 컴퓨터에서 열어 Firebase의 대상 UID와 일치하는지 확인합니다.
+
+D1의 사용자 식별자는 이메일이나 표시 이름이 아니라 **`soul-reader-a91f5:UID`** 형식입니다. UID에 작은따옴표가 있어도 준비 스크립트가 SQL에 안전하게 넣도록 처리합니다. 생성된 `WHERE` 조건을 직접 수정하지 않습니다.
+
+저장소에 설치된 Wrangler와 기존 Cloudflare 로그인 상태를 사용해, 운영자가 다음 확인 명령을 직접 실행할 수 있습니다. `--remote`는 실제 Cloudflare 데이터베이스를 대상으로 한다는 뜻입니다. 이 단계의 `01-preview.sql`은 개수만 조회하며 데이터를 변경하지 않습니다.
 
 ```bash
 npx --no-install wrangler d1 execute soul-reader-billing --remote \
   --config wrangler.jsonc --file "$CASE_DIR/preview/01-preview.sql"
 ```
 
-After ownership is verified, the user is disabled, and the two-hour wait has
-finished, prepare the deletion files. Type the full target rather than deriving
-it automatically from the UID file; compare it with Firebase again. Reading the
-confirmation into a variable avoids putting a literal UID in shell history.
+요청자 확인, 계정 사용 중지, 2시간 대기를 모두 마친 뒤 삭제용 파일을 만듭니다. 확인 문구에는 **`soul-reader-a91f5:` 뒤에 실제 UID를 붙인 전체 값**을 직접 입력하고, Firebase 화면과 다시 비교합니다. UID 파일에서 자동으로 가져오지 않습니다. 아래처럼 입력받아 변수로 전달하면 명령어 기록에 UID 자체를 남기지 않을 수 있습니다.
 
 ```bash
 read -r -p 'Type the exact soul-reader-a91f5:UID target: ' DELETION_TARGET
@@ -80,76 +53,42 @@ node scripts/prepare-account-deletion.mjs \
 unset DELETION_TARGET
 ```
 
-## Execute and verify in order
+## 3. 영수증 재사용 방지 기록을 남긴 뒤 해당 계정의 데이터를 지우기
 
-Review all three files before execution. Confirm the selected Cloudflare account,
-database and Firebase UID. Commands below are operator actions; the preparation
-helper does not execute them. These Wrangler scripts are **not promised to be
-atomic transactions**. A command succeeding is not proof that rows were removed.
+실행 전에 생성된 세 파일을 모두 살펴보고, Cloudflare 계정·데이터베이스·Firebase UID가 맞는지 확인합니다. 아래 명령은 운영자가 직접 실행하는 작업이며, 준비 스크립트가 대신 실행하지 않습니다.
 
-1. Run `02-tombstones.sql` first. It copies only this user's receipt digests into
-   `refund_tombstones`, preserving existing entries. Check that the returned
-   `uncovered_purchase_receipts` count is **zero**. If the command fails or the
-   count is nonzero, stop before the purge and resolve the problem.
+이 파일 안의 여러 SQL 문이 **전부 함께 성공하거나 전부 함께 취소된다고 보장하지 않습니다.** 명령 실행에 성공했다는 표시만 보고 삭제가 끝났다고 판단하지 말고, 아래 조회 결과를 반드시 확인합니다.
+
+1. 먼저 `02-tombstones.sql`을 실행합니다. 이 파일은 해당 사용자의 구매 영수증에서 만든 해시값만 `refund_tombstones`에 추가합니다. 해시값은 원래 구매 토큰을 그대로 저장하지 않고 만든 식별값이며, 같은 영수증을 다시 사용하지 못하도록 확인하는 데 씁니다. 기존 기록은 유지됩니다. 결과의 **`uncovered_purchase_receipts`가 0인지** 확인합니다. 이 값은 재사용 방지 기록이 아직 없는 해당 사용자의 구매 건수입니다. 명령이 실패했거나 0이 아니면 다음 삭제 단계로 넘어가지 말고 원인을 해결합니다.
 
    ```bash
    npx --no-install wrangler d1 execute soul-reader-billing --remote \
      --config wrangler.jsonc --file "$CASE_DIR/deletion/02-tombstones.sql"
    ```
 
-2. Run `03-purge.sql`. It deletes the target's `purchases` (including encrypted
-   raw tokens, rights and reading IDs), then `purchase_intents`, `user_revisions`
-   and `rate_limits`. Each DELETE checks that every remaining target receipt has
-   a tombstone, and resolves the required tables before running. Foreign-key
-   dependencies require deleting purchases before intents. The scripts can be
-   rerun after an interruption, but concurrent writes must remain stopped.
+2. `03-purge.sql`을 실행합니다. 해당 사용자의 `purchases`를 먼저 삭제하고, 이어서 `purchase_intents`, `user_revisions`, `rate_limits`를 삭제합니다. `purchases`에는 암호화된 원본 구매 토큰, 구매 이용 권한, 풀이 ID 등이 포함됩니다. 각 `DELETE`는 삭제에 필요한 테이블을 모두 확인하고, **남아 있는 해당 사용자의 모든 구매 영수증에 재사용 방지 기록이 있을 때만** 실행됩니다. 테이블 사이의 연결 조건 때문에 구매 기록을 구매 준비 기록보다 먼저 삭제해야 합니다. 중간에 멈췄다면 파일을 다시 실행할 수 있지만, 그동안에도 해당 계정의 새 기록이 생기지 않도록 Firebase 사용 중지 상태를 유지해야 합니다.
 
    ```bash
    npx --no-install wrangler d1 execute soul-reader-billing --remote \
      --config wrangler.jsonc --file "$CASE_DIR/deletion/03-purge.sql"
    ```
 
-3. Confirm that **all five final counts are zero**. Rerun `01-preview.sql` to
-   independently check the final state. If any query fails or any count is
-   nonzero, keep Firebase disabled, investigate and rerun the relevant steps;
-   do not report completion. A missing or changed ledger schema is a blocker,
-   not a reason to remove the guards or clear entire tables.
-4. Delete the disabled user in Firebase Authentication, then verify that the
-   exact UID is absent. If this fails, the request is not yet complete. Do not
-   sign into that account during processing: a new sign-in after deletion may
-   create a new Firebase account with a different UID.
-5. Notify the requester after both Firebase and D1 checks succeed. Explain the
-   retained receipt-security records below, and ask them to clear local data on
-   every device. Remove private SQL/UID files and request correspondence once
-   request handling is complete. Avoid retaining email, UID or case notes in
-   application logs or security tombstones. Use the operator's normal handling
-   for mail trash/backups; do not promise instant deletion of provider backups.
+3. 마지막에 나오는 **다섯 개의 조회 결과가 모두 0인지** 확인합니다. `01-preview.sql`도 다시 실행해 최종 상태를 별도로 확인합니다. 조회가 하나라도 실패하거나 0이 아닌 값이 있으면 Firebase 사용 중지 상태를 유지하고, 원인을 확인한 뒤 필요한 단계를 다시 실행합니다. 이때는 삭제 완료로 안내하지 않습니다. 필요한 테이블이 없거나 구조가 달라졌다면 문제를 해결해야 합니다. 확인 조건을 지우거나 테이블 전체를 비우는 방법으로 진행하지 않습니다.
+4. Firebase Authentication에서 사용 중지한 사용자를 삭제하고, **그 UID가 더 이상 없는지** 확인합니다. Firebase 삭제에 실패했다면 요청 처리가 아직 끝난 것이 아닙니다. 처리 중에는 해당 계정으로 앱에 로그인하지 않습니다. 삭제 후 다시 로그인하면 다른 UID를 가진 새 Firebase 계정이 만들어질 수 있습니다.
+5. Firebase와 D1을 모두 확인한 뒤 사용자에게 완료를 알립니다. 아래의 영수증 재사용 방지 기록이 남는다는 점과, 각 기기의 앱 데이터를 직접 지워야 한다는 점을 안내합니다. 요청 처리가 끝나면 작업용 SQL·UID 파일과 요청 관련 이메일을 삭제합니다. 앱 로그나 재사용 방지 기록에 이메일·UID·처리 메모를 남기지 않습니다. 메일 휴지통과 백업은 운영자가 사용하는 서비스의 관리 방법에 따라 정리하며, 서비스 제공자의 백업까지 즉시 삭제된다고 약속하지 않습니다.
 
-Never change `ACCOUNT_HMAC_KEY` or `TOKEN_ENCRYPTION_KEY`, delete another user's
-rows, clear shared tables, or reset `refund_sync`. Never remove existing refund
-tombstones as part of this request. Deletion must not turn an old receipt into a
-new entitlement. If there is a specific applicable obligation to preserve an
-otherwise linked record, establish and disclose its actual scope and duration
-before completing the request; this runbook invents no legal retention period.
+`ACCOUNT_HMAC_KEY`, `TOKEN_ENCRYPTION_KEY`는 변경하지 않습니다. 다른 사용자의 행을 삭제하거나, 공용 테이블 전체를 비우거나, `refund_sync`를 초기화하지 않습니다. 기존 환불 영수증의 재사용 방지 기록도 이번 요청 때문에 삭제하지 않습니다. 계정 삭제 때문에 예전 영수증으로 새 이용 권한을 받을 수 있게 되어서는 안 됩니다.
 
-## What remains and what the user must clear
+특정 기록을 보관해야 하는 실제 의무가 있다면, 해당 기록과 실제 보관 기간을 확인해 사용자에게 설명한 뒤 처리합니다. 이 문서는 법정 보관 기간을 임의로 정하지 않습니다.
 
-`refund_tombstones` retains only a one-way SHA-256 purchase-token digest and its
-revocation timestamp for the service lifetime to prevent receipt reuse. The
-table contains no Firebase UID, email, photo or raw purchase token. These are
-pseudonymous security records, not guaranteed anonymous data: someone holding
-the corresponding receipt could match its digest. Google retains its own
-transaction records, including the original obfuscated account/profile fields;
-deleting our D1 rows does not erase Google's records. The 30-day constant in
-refund synchronization is an API lookback, **not** a personal-data retention
-promise. This workflow must not be described as deleting every trace of a payment.
+## 4. 서버에 남는 기록과 사용자가 직접 지울 데이터
 
-Photos, derived face measurements, reading snapshots and story choices are
-processed/stored locally; the server cannot remotely wipe those devices. On
-Android, use **Settings → Apps → SOUL READER → Storage → Clear storage/data** on
-each device (wording varies). This also removes pending billing journals and
-the local sign-in state. The app's existing archive-delete button clears only
-its basic archive; it does not clear all story storage or native files. Original
-gallery photos belong to the user's photo library and are outside this deletion
-flow. Temporary camera/cache copies may remain under platform cache management.
-No automated account deletion or remote device wipe is implemented by this helper.
+`refund_tombstones`에는 구매 영수증의 재사용을 막기 위해 **구매 토큰의 SHA-256 단방향 해시값과 사용 무효 처리 시각만 서비스 운영 기간 동안** 보관합니다. 이 테이블에는 Firebase UID, 이메일, 사진, 원본 구매 토큰이 들어가지 않습니다. 다만 원래 영수증을 가진 사람은 해시값을 대조할 수 있으므로, 완전히 익명인 정보라고 설명해서는 안 됩니다.
+
+Google은 원래의 가려진 계정·프로필 식별값을 포함한 자체 거래 기록을 보관합니다. 우리 D1의 데이터를 지워도 Google의 기록까지 지워지는 것은 아닙니다. 환불 확인 코드의 30일 설정은 Google API에서 과거 환불을 조회하는 범위이며, **개인정보를 30일만 보관한다는 뜻이 아닙니다.** 이 절차로 결제의 모든 흔적이 사라진다고 안내하지 않습니다.
+
+사진은 기기에서 처리되며, 얼굴 측정값·풀이 기록·이야기에서 선택한 내용도 기기 안에서 처리되거나 저장됩니다. 서버에서 사용자의 기기를 원격으로 지울 수는 없습니다. 사용자는 이용한 Android 기기마다 **설정 → 앱 → SOUL READER → 저장공간 → 데이터 삭제 또는 저장공간 삭제**를 실행해야 합니다. 기기에 따라 메뉴 이름이 다를 수 있습니다. 이 작업은 처리 대기 중인 구매 정보 파일과 기기에 남은 로그인 상태도 지웁니다.
+
+앱의 기존 기록 삭제 버튼은 기본 보관함만 지웁니다. 모든 이야기 저장 데이터나 앱 내부 파일을 지우는 기능은 아닙니다. 갤러리의 원본 사진은 사용자 사진 보관함에 있으므로 이 계정 삭제 절차로 지워지지 않습니다. 카메라·캐시의 임시 사진 사본은 기기의 캐시 관리에 따라 남아 있을 수 있습니다.
+
+이 준비 스크립트는 계정을 자동으로 삭제하거나 기기 데이터를 원격 삭제하는 기능을 제공하지 않습니다.

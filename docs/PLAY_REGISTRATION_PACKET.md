@@ -32,7 +32,7 @@
 | 개인정보처리방침·계정 삭제 URL | 아래 준비 주소의 배포·접속과 실제 처리 절차 확인 후 입력 |
 | 광고 | 현재 소스 기준 광고 없음 — 제출할 최종 빌드에서 재확인 |
 
-준비한 공개 경로는 개인정보처리방침 `https://soul-reader-billing.jgw98541706.workers.dev/privacy`, 계정 삭제 요청 `https://soul-reader-billing.jgw98541706.workers.dev/delete-account`입니다. 코드 준비와 실제 공개는 별개이므로 배포 후 로그인 없이 열리는지 확인한 뒤 Console에 입력합니다. 운영 절차는 [ACCOUNT_DELETION_RUNBOOK.md](ACCOUNT_DELETION_RUNBOOK.md)를 참고합니다.
+공개 경로는 개인정보처리방침 `https://soul-reader-billing.jgw98541706.workers.dev/privacy`, 계정 삭제 요청 `https://soul-reader-billing.jgw98541706.workers.dev/delete-account`입니다. 2026-10-30 배포 후 로그인 없이 접속하는 [자동 검사](https://github.com/pjinh1229-code/soul-reader-/actions/runs/40992472395)를 통과했습니다. 운영 절차는 [ACCOUNT_DELETION_RUNBOOK.md](ACCOUNT_DELETION_RUNBOOK.md)를 참고합니다.
 
 의료·건강, 금융, 정부 또는 뉴스 앱으로 소개하지 않습니다. 관상 상징을 소재로 한 오락 콘텐츠이며 건강 진단·투자 수익·미래 예측을 보장하는 표현을 사용하지 않습니다.
 
