@@ -4,6 +4,7 @@ import { BillingLedger, BillingServerFailure, fail, publicGrant, secretKey, toke
 import { SETUP_PAGE, SETUP_CSP } from './setup_page.mjs';
 import { UPLOAD_RECOVERY_PAGE, UPLOAD_RECOVERY_CSP } from './upload_recovery_page.mjs';
 import { readOperationalDiagnostics, recordOperationalFailure } from './operational_diagnostics.mjs';
+import { legalPageResponse } from './legal_pages.mjs';
 
 const PACKAGE = 'com.soulreader.soul_reader';
 // Conservative free-Worker bound, including D1 operations and one OAuth refresh
@@ -242,6 +243,8 @@ export function createBillingWorker({ clock = Date.now, authenticateFactory, pub
     try {
       const url = new URL(request.url);
       if (url.protocol !== 'https:') fail('invalid_request');
+      const legal = legalPageResponse(request);
+      if (legal) return legal;
       if (request.method === 'GET' && ['/setup/service-account', '/setup/upload-key'].includes(url.pathname) && !url.search) {
         // This page only reads a user-selected file in that user's browser.
         // It submits no file content and works before runtime secrets are valid.

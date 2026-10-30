@@ -11,6 +11,21 @@ permissions:
   contents: read
 
 jobs:
+  public-legal-pages:
+    if: >-
+      github.event_name != 'check_run' ||
+      (github.event.check_run.name == 'Workers Builds: soul-reader-billing' &&
+       github.event.check_run.conclusion == 'success' &&
+       github.event.check_run.check_suite.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Check public privacy and account deletion resources
+        run: node server/scripts/check-public-legal.mjs
   service-account-helper:
     if: >-
       github.event_name != 'check_run' ||
