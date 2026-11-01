@@ -10,6 +10,8 @@
 - 서버에 `PLAY_REVIEW_ACCESS_CODE`가 없으면 검토용 로그인이 거부됩니다. 새 코드 생성 페이지를 열었다고 서버에 자동 등록되는 것이 아닙니다.
 - 코드와 실제 앱으로 접근 확인을 마치기 전에는 Console의 ‘모든 기능과 콘텐츠에 대한 전체 액세스 권한’ 확인란을 선택하지 않습니다.
 
+2026-11-01 소유자가 코드 등록과 준비 페이지 연결 확인을 완료했습니다. Play Console의 버전 98 내부 테스트 제공 상태를 확인했고, 새 앱의 검토용 접근 배너 스크린샷과 네 주제가 결제 없이 열린다는 소유자 확인을 받았습니다. 실제 비밀번호는 Codex에 전달되지 않았습니다. 아래 준비 절차를 이미 마쳤다면 같은 코드를 유지하고 **4번 Console 입력**으로 진행합니다.
+
 ## 1. 코드 생성과 보관
 
 브라우저에서 다음 주소를 엽니다. 실제 배포 후 접속 검사가 완료됐는지도 확인합니다.
@@ -60,7 +62,7 @@ https://soul-reader-billing.jgw98541706.workers.dev/setup/review-access
 **추가 안내**에는 다음 영어 문구를 붙여넣습니다. 본문 468자로 500자 제한 안입니다.
 
 ```text
-Choose English, then tap 'Review access' at the bottom of the home screen. Use username play-review and the password above. Take or choose a clear front-facing photo and complete the free reading. Open any of the four topics to view the same paid reading content. No Google sign-in, payment, OTP or trial is required for review access. Sessions last one hour; sign in again with the same credentials if needed. Tap 'Exit' in the review banner to return to normal mode.
+Select English. Tap 'Review access' at the bottom of the home screen and use username play-review with the password above. Take or choose a clear front-facing photo and complete the free reading. Tap 'Stories', then 'View all four topics', and open each topic. The same paid content is available without Google sign-in, payment, OTP or a trial. Sessions last one hour; sign in again with the same credentials if needed. Tap 'Exit' in the banner to leave review access.
 ```
 
 실제 접근 확인을 마친 뒤 전체 액세스 확인란을 체크하고 **추가 → 저장**을 완료합니다. 심사에 제출하는 AAB에도 이 기능이 포함돼야 합니다. Console에 문구를 입력하는 것으로 이전 버전의 기능이 바뀌지는 않습니다.
