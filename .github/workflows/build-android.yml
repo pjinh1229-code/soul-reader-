@@ -2,7 +2,7 @@ name: Build SOUL READER Android
 
 on:
   push:
-    branches: [main, feat/play-billing-8.5.6, build/play-release-v97]
+    branches: [main, feat/play-billing-8.5.6, build/play-review-v98]
   workflow_dispatch:
     inputs:
       artifact_type:
@@ -15,7 +15,7 @@ on:
       version_code:
         description: Internal AAB version code, greater than any previous Play upload
         type: string
-        default: '97'
+        default: '98'
 
 permissions:
   contents: read
@@ -44,7 +44,7 @@ jobs:
 
   android-debug-apk:
     if: >-
-      !(github.event_name == 'push' && github.ref == 'refs/heads/build/play-release-v97') &&
+      !(github.event_name == 'push' && github.ref == 'refs/heads/build/play-review-v98') &&
       (github.event_name != 'workflow_dispatch' || inputs.artifact_type != 'internal_aab')
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -80,6 +80,8 @@ jobs:
           # paid855 replaces story75/ending80 tests for the retired fiction flow.
           node tests/billing_ui.cjs
           node tests/legal_links.cjs
+          node tests/review_access_ui.cjs
+          node tests/review_setup_ui.cjs
           node tests/voice856.cjs
           node tests/paid855.cjs
           node tests/photo_bridge.cjs
@@ -218,12 +220,12 @@ jobs:
   android-internal-aab:
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.artifact_type == 'internal_aab') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/build/play-release-v97')
+      (github.event_name == 'push' && github.ref == 'refs/heads/build/play-review-v98')
     needs: billing-server
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
-      SOUL_INTERNAL_VERSION_CODE: ${{ inputs.version_code || '97' }}
+      SOUL_INTERNAL_VERSION_CODE: ${{ inputs.version_code || '98' }}
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
@@ -260,6 +262,8 @@ jobs:
           node tests/photo_bridge.cjs
           node tests/locales854.cjs
           node tests/legal_links.cjs
+          node tests/review_access_ui.cjs
+          node tests/review_setup_ui.cjs
       - name: Setup Flutter stable
         uses: subosito/flutter-action@v2
         with:

@@ -20,19 +20,23 @@
   let auth = null, authRequest = null;
   const context = () => app.context();
   const text = () => ({...(words[context().lang] || words.ko),...(authWords[context().lang] || authWords.ko)});
+  const reviewing = () => context().reviewActive === true;
+  const reviewStatus = () => ({ko:'검토용 접근 · 결제 없이 콘텐츠 확인',en:'Review access · View content without payment',ja:'審査用アクセス · 決済なしでコンテンツを確認'})[context().lang] || 'Review access';
   const requestId = () => `billing-${Date.now()}-${++sequence}`;
   const product = key => state.products.find(item => item.offerKey === key);
   const busy = () => state.busy || auth?.busy || authRequest !== null || currentRequest !== null || pendingTopic !== null;
   const signedIn = () => auth === null || auth.signedIn;
   const unsettled = () => state.busy || currentRequest !== null || pendingTopic !== null || ['purchasing','pending','verifying','restoring'].includes(state.status);
-  const ready = () => signedIn() && ['ready','canceled'].includes(state.status) && state.configured && state.storeAvailable && !!window.StoreBilling;
+  const ready = () => !reviewing() && signedIn() && ['ready','canceled'].includes(state.status) && state.configured && state.storeAvailable && !!window.StoreBilling;
   const owned = key => {const pass=context().entitlement;return !!pass && (pass.offerKey==='bundle'||pass.offerKey===key);};
   function send(action, extra={}) {
+    if (reviewing() && action !== 'status') return false;
     if (!window.StoreBilling?.postMessage) return false;
     try {window.StoreBilling.postMessage(JSON.stringify({action,requestId:requestId(),...(auth?{epoch:auth.epoch}:{}),...extra}));return true;} catch {return false;}
   }
   function statusText() {
     const t=text();
+    if (reviewing()) return reviewStatus();
     if (auth?.busy || authRequest) return t.authWorking;
     if (pendingTopic) return t.selecting;
     if (state.status === 'pending' || state.errorCode === 'purchase_pending') return t.pending;
@@ -47,16 +51,16 @@
   function authControls() {
     if (!auth?.available) return '';
     const t=text();
-    if (!auth.signedIn) return `<section class="billing-account"><p class="billing-note">${esc(t.signInHelp)}</p><button class="btn-line" data-billing-sign-in ${auth.busy||authRequest?'disabled':''}>${esc(t.signIn)}</button></section>`;
-    return `<section class="billing-account"><p class="billing-note">${esc(t.signedIn)}${auth.label?' · '+esc(auth.label):''}</p><button class="btn-line" data-billing-sign-out ${auth.busy||authRequest||unsettled()?'disabled':''}>${esc(t.signOut)}</button></section>`;
+    if (!auth.signedIn) return `<section class="billing-account"><p class="billing-note">${esc(t.signInHelp)}</p><button class="btn-line" data-billing-sign-in ${reviewing()||auth.busy||authRequest?'disabled':''}>${esc(t.signIn)}</button></section>`;
+    return `<section class="billing-account"><p class="billing-note">${esc(t.signedIn)}${auth.label?' · '+esc(auth.label):''}</p><button class="btn-line" data-billing-sign-out ${reviewing()||auth.busy||authRequest||unsettled()?'disabled':''}>${esc(t.signOut)}</button></section>`;
   }
   function common() {
     const t=text();
-    return `${authControls()}<p class="billing-status" role="status" aria-live="polite">${esc(statusText())}</p><div class="billing-actions"><button class="btn-line" data-billing-refresh ${busy()?'disabled':''}>${esc(t.refresh)}</button><button class="btn-line" data-billing-restore ${!signedIn()||!state.configured||state.canRestore===false||!window.StoreBilling||busy()?'disabled':''}>${esc(t.restore)}</button></div><p class="billing-note">${esc(t.restoreHelp)}</p>`;
+    return `${window.SoulReviewAccess?.entry()||''}${authControls()}<p class="billing-status" role="status" aria-live="polite">${esc(statusText())}</p><div class="billing-actions"><button class="btn-line" data-billing-refresh ${busy()?'disabled':''}>${esc(t.refresh)}</button><button class="btn-line" data-billing-restore ${reviewing()||!signedIn()||!state.configured||state.canRestore===false||!window.StoreBilling||busy()?'disabled':''}>${esc(t.restore)}</button></div><p class="billing-note">${esc(t.restoreHelp)}</p>`;
   }
   function passCard(key, checkout=false) {
     const t=text(),p=product(key),canBuy=ready()&&p&&p.available!==false&&p.canBuy!==false&&context().readingId&&!busy()&&!owned(key);
-    return `<section class="pack-tile ${key==='bundle'?'featured':''}" data-billing-offer="${key}"><div class="pack-head"><h2>${esc(t[key])}</h2><strong class="pack-price">${esc(p?.price||t.unknown)}</strong></div><p>${esc(key==='single'?t.singleHelp:t.bundleHelp)}</p><p class="billing-scope">${esc(t.scope)}</p>${owned(key)?`<p class="billing-owned">${esc(t.owned)}</p><button class="btn-line" data-route="chapters52">${esc(t.resume)}</button>`:checkout?`<button class="btn-primary" data-billing-buy="${key}" ${canBuy?'':'disabled'}>${esc(t.buy)}${p?' · '+esc(p.price):''}</button>`:`<button class="${key==='bundle'?'btn-primary':'btn-line'}" data-pickpack="${key}" ${busy()?'disabled':''}>${esc(t.buy)} →</button>`}</section>`;
+    return `<section class="pack-tile ${key==='bundle'?'featured':''}" data-billing-offer="${key}"><div class="pack-head"><h2>${esc(t[key])}</h2><strong class="pack-price">${esc(p?.price||t.unknown)}</strong></div><p>${esc(key==='single'?t.singleHelp:t.bundleHelp)}</p><p class="billing-scope">${esc(t.scope)}</p>${owned(key)?`<p class="billing-owned">${esc(t.owned)}</p><button class="btn-line" data-route="chapters52">${esc(t.resume)}</button>`:checkout?`<button class="btn-primary" data-billing-buy="${key}" ${canBuy?'':'disabled'}>${esc(t.buy)}${p?' · '+esc(p.price):''}</button>`:`<button class="${key==='bundle'?'btn-primary':'btn-line'}" data-pickpack="${key}" ${reviewing()||busy()?'disabled':''}>${esc(t.buy)} →</button>`}</section>`;
   }
   function history(ctx) {
     const t=text(),saved=(ctx.ownedReadings||[]).filter(item=>item.readingId!==ctx.readingId);
@@ -83,7 +87,7 @@
   }
   function selectTopic(topic) {
     const c=context(),pass=c.entitlement;
-    if (!signedIn() || busy() || !pass || pass.offerKey!=='single' || pass.topic!==null || !['love','chance','work','bond'].includes(topic)) return;
+    if (reviewing() || !signedIn() || busy() || !pass || pass.offerKey!=='single' || pass.topic!==null || !['love','chance','work','bond'].includes(topic)) return;
     const id=requestId();pendingTopic={id,readingId:c.readingId,entitlementId:pass.entitlementId,topic};message='';
     if (!send('selectTopic',{requestId:id,readingId:c.readingId,entitlementId:pass.entitlementId,topic})) {pendingTopic=null;message=text().selectedError;}
     app.refresh();
@@ -164,6 +168,7 @@
   window.addEventListener('click',event=>{
     const b=event.target.closest?.('[data-billing-buy],[data-billing-refresh],[data-billing-restore],[data-billing-sign-in],[data-billing-sign-out]');if(!b)return;
     event.preventDefault();event.stopImmediatePropagation();if(b.disabled)return;
+    if(reviewing()&&!b.hasAttribute('data-billing-refresh'))return;
     if(b.hasAttribute('data-billing-sign-in')||b.hasAttribute('data-billing-sign-out')) {
       const signingIn=b.hasAttribute('data-billing-sign-in');
       if(!auth?.available||auth.busy||authRequest||(!signingIn&&unsettled()))return;

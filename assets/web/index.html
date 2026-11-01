@@ -2085,8 +2085,85 @@ episode52=function(){const html=episodeBefore856();return allowed75(session75(),
 Object.assign(ROUTES,{result,episode52});
 const css856=document.createElement('style');css856.textContent=`.sr856-voice{padding:18px;margin:16px 0;border:1px solid #caa6d166;border-radius:18px;background:#302038;overflow-wrap:anywhere}.sr856-voice h2{font-size:17px;margin:0 0 10px;color:#ffe4cf}.sr856-voice .ryu56-dialogue{font-size:14px;line-height:1.9;margin:0 0 14px;white-space:pre-line}.sr856-controls{display:flex;flex-wrap:wrap;gap:8px}.sr856-controls .btn-line{width:auto;flex:1 1 auto;margin:0;padding:10px;font-size:12px}.sr856-voice [role=status]{font-size:12px;line-height:1.6;margin-top:8px;color:#dec7de}`;document.head.appendChild(css856);
 
+// Review access comes only from the installed app after server authentication.
+// Its content sessions are separate from purchase grants and never reach storage.
+const reviewSessions75=new Map();
+let reviewExpiresAt75=0,reviewTimer75=null;
+const REVIEW75={
+ ko:{entry:'검토용 접근',banner:'검토용 접근 · 결제 없이 콘텐츠 확인',exit:'종료',help:'설치된 앱에서 검토용 계정으로 인증해 주세요.',browser:'검토용 접근은 설치된 앱에서 사용할 수 있어요.',active:'1시간 동안 결제와 Google 로그인 없이 네 주제의 실제 콘텐츠를 확인할 수 있어요. 구매 내역은 추가되지 않아요.',open:'네 주제 콘텐츠 확인',start:'사진 풀이 시작'},
+ en:{entry:'Review access',banner:'Review access · View content without payment',exit:'Exit',help:'Authenticate with the review account in the installed app.',browser:'Review access requires the installed app.',active:'View the actual content for all four topics for one hour without payment or Google sign-in. No purchase is added.',open:'View all four topics',start:'Start a photo reading'},
+ ja:{entry:'審査用アクセス',banner:'審査用アクセス · 決済なしでコンテンツを確認',exit:'終了',help:'インストールしたアプリで審査用アカウントを認証してください。',browser:'審査用アクセスにはインストール済みのアプリが必要です。',active:'1時間、決済やGoogleログインなしで四テーマの実際のコンテンツを確認できます。購入履歴は追加されません。',open:'四テーマのコンテンツを確認',start:'写真の読みを始める'}
+};
+const reviewText75=()=>REVIEW75[state.lang]||REVIEW75.ko;
+const reviewNative75=()=>typeof window.ReviewAccess?.postMessage==='function';
+function reviewActive75(){return reviewNative75()&&reviewExpiresAt75>Date.now()}
+function reviewSend75(action){if(!['open','exit','status'].includes(action)||!reviewNative75())return false;try{window.ReviewAccess.postMessage(action);return true}catch{return false}}
+function reviewSession75(){
+ if(!reviewActive75()||!state.reading?.id)return null;
+ const id=state.reading.id;
+ if(!reviewSessions75.has(id))reviewSessions75.set(id,{id,access:'review',pack:'bundle',topic:null,choices:{},completed:[]});
+ return reviewSessions75.get(id);
+}
+function reviewEnd75(refresh=true){
+ const hadReview=reviewExpiresAt75!==0;reviewExpiresAt75=0;clearTimeout(reviewTimer75);reviewTimer75=null;reviewSessions75.clear();
+ if(hadReview){activate75(null);referenceMode84='general';if(['chapters52','episode52','finale54','theory83'].includes(state.screen))state.screen='premium';}
+ if(refresh)render();
+}
+function reviewEntry75(){
+ const t=reviewText75(),active=reviewActive75();
+ return `<section class="review-access-entry"><button type="button" class="btn-line" data-review-action="open" ${!reviewNative75()||active||window.SoulBilling?.isBusy()?'disabled':''}>${esc(t.entry)}</button><p class="billing-note">${esc(active?t.active:reviewNative75()?t.help:t.browser)}</p>${active?`<button type="button" class="btn-line" data-route="${state.reading?'chapters52':'themes'}">${esc(state.reading?t.open:t.start)}</button>`:''}</section>`;
+}
+window.SoulReviewAccess=Object.freeze({isActive:reviewActive75,entry:reviewEntry75});
+window.soulReviewAccessReceive=function(payload){
+ if(!reviewNative75()||!payload||typeof payload!=='object'||Array.isArray(payload)||typeof payload.active!=='boolean')return;
+ if(!payload.active){reviewEnd75();return;}
+ const now=Date.now();
+ if(!Number.isSafeInteger(payload.expiresAt)||payload.expiresAt<=now||payload.expiresAt>now+3600000+5000||window.SoulBilling?.isBusy()){
+  reviewSend75('exit');reviewEnd75();return;
+ }
+ reviewExpiresAt75=payload.expiresAt;clearTimeout(reviewTimer75);
+ reviewTimer75=setTimeout(()=>{reviewSend75('exit');reviewEnd75()},payload.expiresAt-now);
+ render();
+};
+const reviewLegacySave75=save75;
+save75=function(s){
+ if(s?.access==='review'){if(reviewActive75()&&reviewSessions75.get(s.id)===s)s.updatedAt=Date.now();return;}
+ if(reviewActive75())return;
+ return reviewLegacySave75(s);
+};
+const reviewLegacyRender75=render;
+render=function(){
+ if(reviewExpiresAt75&&!reviewActive75()){reviewSend75('exit');reviewEnd75(false);}
+ reviewLegacyRender75();
+ document.body.classList.toggle('review-access-active',reviewActive75());
+ const footer=document.querySelector('#legal-support'),t=reviewText75();
+ footer?.insertAdjacentHTML('beforeend',`<button type="button" data-review-action="open" ${!reviewNative75()||reviewActive75()||window.SoulBilling?.isBusy()?'disabled':''}>${esc(t.entry)}</button>${!reviewNative75()?`<small>${esc(t.browser)}</small>`:''}`);
+ if(reviewActive75()){
+  document.querySelector('#app')?.insertAdjacentHTML('afterbegin',`<aside class="review-access-banner" role="status"><strong>${esc(t.banner)}</strong><button type="button" data-review-action="exit">${esc(t.exit)}</button></aside>`);
+  document.body.style.setProperty('--review-banner-height',`${document.querySelector('.review-access-banner').offsetHeight+8}px`);
+  document.querySelectorAll('.page > .eyebrow').forEach(el=>{if(['chapters52','episode52','finale54'].includes(state.screen))el.textContent=t.entry;});
+  document.querySelectorAll('[data-demo-unlock],[data-billing-buy],[data-billing-sign-in],[data-billing-sign-out],[data-billing-restore]').forEach(el=>el.disabled=true);
+ }
+};
+// Window capture runs before the older document delegates and the billing module.
+window.addEventListener('click',event=>{
+ const button=event.target.closest?.('[data-review-action],[data-demo-unlock],[data-billing-buy],[data-billing-sign-in],[data-billing-sign-out],[data-billing-restore]');if(!button)return;
+ if(button.hasAttribute('data-review-action')){
+  event.preventDefault();event.stopImmediatePropagation();if(button.disabled)return;
+  if(button.dataset.reviewAction==='exit'){reviewSend75('exit');reviewEnd75();}
+  else if(button.dataset.reviewAction==='open'&&!reviewActive75()&&!window.SoulBilling?.isBusy())reviewSend75('open');
+  return;
+ }
+ if(reviewActive75()){event.preventDefault();event.stopImmediatePropagation();}
+},true);
+window.addEventListener('pagehide',()=>{if(reviewExpiresAt75){reviewSend75('exit');reviewEnd75(false);}});
+window.addEventListener('pageshow',event=>{if(event.persisted)render();});
+const reviewCheck75=()=>{if(reviewExpiresAt75&&!reviewActive75()){reviewSend75('exit');reviewEnd75();}};
+window.addEventListener('focus',reviewCheck75);document.addEventListener('visibilitychange',reviewCheck75);
+const reviewStyle75=document.createElement('style');reviewStyle75.textContent='body.review-access-active #app{overflow:clip}body.review-access-active #sr70-tools{top:calc(var(--review-banner-height,100px) + env(safe-area-inset-top))}.review-access-banner{position:sticky;top:0;z-index:450;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;background:#37414f;color:#fff3d7;border-bottom:1px solid #d2ba87;font-size:13px;line-height:1.6}.review-access-banner strong{overflow-wrap:anywhere}.review-access-banner button{flex-shrink:0;min-height:44px;padding:8px 13px;border:1px solid #d2ba87;border-radius:9px;background:transparent;color:inherit}.review-access-entry{margin:18px 0;padding:14px;border:1px solid #d2ba8766;border-radius:13px}.review-access-entry .btn-line{margin:0 0 8px}.legal-support small{font-size:11px;line-height:1.6;color:#cdb7cf;text-align:center}.legal-support button:disabled{opacity:.5}';document.head.appendChild(reviewStyle75);
+
 // Payment access is authoritative only after a native, server-verified grant.
-let billingPaymentsEnabled=!!window.StoreBilling;
+let billingPaymentsEnabled=!!window.StoreBilling||reviewNative75();
 const billingGrants=new Map(),billingReadings=new Map();
 const billingLegacySession=session75,billingLegacyAllowed=allowed75;
 function billingSnapshotReading(reading){return JSON.parse(JSON.stringify(reading,(key,value)=>/^(photoData|photoUrl|dataUrl|imageData|imageBytes|photo|image|stream)$/i.test(key)||(typeof value==='string'&&/^(data:image\/|blob:|file:|content:)/i.test(value))?undefined:value))}
@@ -2101,7 +2178,7 @@ function billingSyncSession(id){
  try{localStorage.setItem('sr75-stories',JSON.stringify(book75))}catch{}
  return s;
 }
-session75=function(){if(!billingPaymentsEnabled)return billingLegacySession();return state.reading?.id?billingSyncSession(state.reading.id):null};
+session75=function(){if(reviewActive75())return reviewSession75();if(!billingPaymentsEnabled)return billingLegacySession();return state.reading?.id?billingSyncSession(state.reading.id):null};
 allowed75=function(s,key){if(!billingPaymentsEnabled)return billingLegacyAllowed(s,key);return !!s&&TOPICS75.includes(key)&&(s.pack==='bundle'||s.topic===key)};
 const billingLegacyChapters=chapters52;
 chapters52=function(){
@@ -2115,6 +2192,7 @@ ROUTES.chapters52=chapters52;
 window.SoulBillingApp=Object.freeze({
  enable(){billingPaymentsEnabled=true;for(const lang of ['ko','en','ja']){PREM[lang].demo=({ko:'구매 확인된 이용권',en:'Verified purchased pass',ja:'購入確認済みのパス'})[lang];PREM[lang].noPay=({ko:'이용권은 스토어 구매 확인 후 적용돼. 구매와 환불 안내는 스토어에서 확인해 줘.',en:'Passes apply after store purchase verification. Review purchase and refund information in the store.',ja:'パスはストアでの購入確認後に適用されるよ。購入と払い戻しの案内はストアで確認してね。'})[lang];}document.querySelectorAll('#sr70-panel p').forEach(p=>{p.textContent=p.textContent.replace('결제는 데모입니다.','이용권은 구매 확인 후 적용됩니다.')});},
  persistPurchaseReading({requestId,offerKey}){
+  if(reviewActive75())return false;
   if(!state.reading?.id||typeof requestId!=='string'||!['single','bundle'].includes(offerKey))return false;
   try{
    const reading=billingSnapshotReading(state.reading),id=reading.id,previous=book75[id]||{id,choices:{},completed:[]};
@@ -2125,7 +2203,7 @@ window.SoulBillingApp=Object.freeze({
    book75=next;billingReadings.set(id,reading);return true;
   }catch{return false;}
  },
- context(){billingRememberReading();const e=billingGrants.get(state.reading?.id);return {lang:state.lang,screen:state.screen,readingId:state.reading?.id||null,offerKey:samplePack,entitlement:e?{...e}:null,ownedReadings:[...billingGrants.values()].filter(g=>book75[g.readingId]?.reading).map(g=>({readingId:g.readingId,offerKey:g.offerKey,date:book75[g.readingId].reading.date||null})),labels:{...ui855()}}},
+ context(){billingRememberReading();const e=billingGrants.get(state.reading?.id);return {lang:state.lang,screen:state.screen,readingId:state.reading?.id||null,offerKey:samplePack,reviewActive:reviewActive75(),entitlement:e?{...e}:null,ownedReadings:[...billingGrants.values()].filter(g=>book75[g.readingId]?.reading).map(g=>({readingId:g.readingId,offerKey:g.offerKey,date:book75[g.readingId].reading.date||null})),labels:{...ui855()}}},
  shell(body,back='premium'){return `<main class="scene">${headerBar(back)}<section class="page billing-page">${body}</section>${bottom()}</main>`},
  installViews(views){premium52=()=>views.premium(this.context());checkout52=()=>views.checkout(this.context());ROUTES.premium=premium52;ROUTES.checkout52=checkout52;},
  refresh(){render()},notice(message){notify(message)},route(name){goto(name)},
@@ -2157,6 +2235,9 @@ window.addEventListener('click',event=>{
  event.preventDefault();event.stopImmediatePropagation();
  notify(({ko:'구매 확인이 완료된 이용권만 사용할 수 있어.',en:'A verified purchased pass is required.',ja:'購入確認済みのパスが必要だよ。'})[state.lang]);
 },true);
+
+render();
+reviewSend75('status');
 
   ROUTES.photo = photoView;
   // Consume WebView file-input clicks and route them to the native image picker.

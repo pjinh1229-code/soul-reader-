@@ -14,6 +14,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import 'face_measure.dart';
+import 'review_access.dart';
 import 'billing/account_billing_lifecycle.dart';
 import 'billing/auth_session.dart';
 import 'billing/billing_controller.dart';
@@ -47,7 +48,7 @@ class SoulReaderHome extends StatefulWidget {
   State<SoulReaderHome> createState() => _SoulReaderHomeState();
 }
 
-class _SoulReaderHomeState extends State<SoulReaderHome> {
+class _SoulReaderHomeState extends State<SoulReaderHome> with WidgetsBindingObserver {
   late final WebViewController _web;
   final _picker = ImagePicker();
   bool _photoScreen = false;
@@ -66,6 +67,13 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
   Future<void> _billingCommandQueue = Future<void>.value();
   bool _webPageReady = false;
   bool _legalSupportOpen = false;
+  late final ReviewAccessSession _reviewAccess;
+  Timer? _reviewExpiryTimer;
+  Future<void> _reviewJsQueue = Future<void>.value();
+  bool _reviewDialogOpen = false;
+  bool _applicationActive = true;
+  bool _billingInitializing = false;
+  int _billingCommandsPending = 0;
   Map<String, dynamic> _billingState = {
     'status': 'unconfigured', 'configured': false,
     'storeAvailable': false, 'busy': false, 'products': <Object>[],
@@ -74,6 +82,11 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _reviewAccess = ReviewAccessSession(
+      client: ReviewAccessClient(),
+      onChanged: _onReviewAccessChanged,
+    );
     _web = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF16101F))
@@ -90,7 +103,9 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
       ..addJavaScriptChannel('FaceScan', onMessageReceived: _onFaceRequest)
       ..addJavaScriptChannel('StoreBilling', onMessageReceived: _onBillingMessage)
       ..addJavaScriptChannel('LegalSupport', onMessageReceived: _onLegalSupport)
+      ..addJavaScriptChannel('ReviewAccess', onMessageReceived: _onReviewAccess)
       ..setNavigationDelegate(NavigationDelegate(
+        onPageStarted: (_) => _webPageReady = false,
         onNavigationRequest: (request) {
           final uri = Uri.tryParse(request.url);
           final trusted = uri != null && uri.scheme == 'file' &&
@@ -109,11 +124,15 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
             if (payload['type'] != 'auth') await _emitBilling(payload);
           }
           await _emitBilling({'type': 'state', ..._billingState});
+          await _emitReviewAccess();
         },
       ));
     _accountBilling = AccountBillingLifecycle(
       session: widget.billingSession,
       onAuth: (payload) {
+        if (_billingEpoch != payload['epoch'] || payload['busy'] == true) {
+          _reviewAccess.close();
+        }
         _billingEpoch = payload['epoch'] as int;
         unawaited(_emitBilling(payload));
       },
@@ -126,6 +145,7 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
   }
 
   void _onBillingAccountChanged(AccountBillingScope scope) {
+    _reviewAccess.close();
     final previous = _billing;
     _billing = null;
     _purchaseVerifier = null;
@@ -135,6 +155,7 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
     _billingState = {'status': 'unconfigured', 'configured': false,
       'storeAvailable': false, 'busy': false, 'products': <Object>[]};
     unawaited(_emitBilling({'type': 'accountReset'}, epoch: scope.epoch));
+    _billingInitializing = true;
     _billingInitialization = _initializeBilling(scope);
   }
 
@@ -180,6 +201,10 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
             final other => other,
           };
           _billingState = {...snapshot, 'status': status};
+          if (snapshot['busy'] == true || snapshot['status'] == 'pending' ||
+              _billing?.canChangeAccount == false) {
+            _reviewAccess.close();
+          }
           unawaited(_emitBilling({'type': 'state', ..._billingState}, epoch: scope.epoch));
         },
         onEntitlements: (grants) async {
@@ -201,13 +226,15 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
       _billing = controller;
       await controller.initialize();
       if (!scope.isCurrent || !mounted) return;
-      if (controller.isConfigured) await controller.restore();
+      if (controller.isConfigured && !_reviewAccess.active) await controller.restore();
     } catch (_) {
       if (!scope.isCurrent || !mounted) return;
       _billingState = {'status': 'error', 'configured': false,
         'storeAvailable': false, 'busy': false, 'products': <Object>[],
         'errorCode': 'billing_initialization_failed'};
       await _emitBilling({'type': 'state', ..._billingState}, epoch: scope.epoch);
+    } finally {
+      if (scope.isCurrent) _billingInitializing = false;
     }
   }
 
@@ -232,25 +259,46 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
   }
 
   void _onBillingMessage(JavaScriptMessage message) {
+    if (!mounted) return;
+    _reviewAccess.expire();
     final receivedEpoch = _billingEpoch;
+    final receivedDuringReview = _reviewAccess.active;
+    _reviewAccess.cancelPending();
+    final reviewGeneration = _reviewAccess.generation;
+    // Reserve even queued work: buy() has its own asynchronous initialization.
+    _billingCommandsPending++;
     _billingCommandQueue = _billingCommandQueue
-        .then((_) => _handleBillingMessage(message, receivedEpoch))
+        .then((_) => _handleBillingMessage(message, receivedEpoch,
+          reviewGeneration, receivedDuringReview))
+        .whenComplete(() { _billingCommandsPending--; })
         .catchError((Object _) {});
   }
 
-  Future<void> _handleBillingMessage(JavaScriptMessage message, int receivedEpoch) async {
+  Future<void> _handleBillingMessage(JavaScriptMessage message, int receivedEpoch,
+      int reviewGeneration, bool receivedDuringReview) async {
     String? requestId;
     final commandEpoch = receivedEpoch;
     try {
+      if (!mounted) return;
       if (message.message.length > 4096) throw const BillingFailure('invalid_request');
       final request = jsonDecode(message.message) as Map<String, dynamic>;
       requestId = request['requestId'] as String?;
       if (commandEpoch != _billingEpoch ||
           (request['epoch'] != null && request['epoch'] != _billingEpoch)) return;
+      final statusOnly = request['action'] == 'status';
+      void requireBillingAccess() {
+        if (receivedDuringReview || _reviewAccess.active ||
+            reviewGeneration != _reviewAccess.generation) {
+          throw const BillingFailure('review_mode_active');
+        }
+      }
+      // Check before waiting for initialization and again at each side effect.
+      if (!statusOnly) requireBillingAccess();
       if (request['action'] == 'signIn' || request['action'] == 'signOut') {
         if (_billing?.canChangeAccount == false) {
           throw const BillingFailure('purchase_busy');
         }
+        requireBillingAccess();
         if (request['action'] == 'signIn') {
           await _accountBilling.signIn();
         } else {
@@ -265,6 +313,14 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
       if (!mounted || commandEpoch != _billingEpoch) return;
       final scope = _accountBilling.scope;
       final controller = _billing;
+      if (statusOnly && _reviewAccess.active) {
+        await _emitBilling({'type': 'state', ..._billingState});
+        await _emitBilling({'type': 'entitlements',
+          'entitlements': _grants.values.map((grant) => grant.toJson()).toList()});
+        await _emitReviewAccess();
+        return;
+      }
+      if (!statusOnly) requireBillingAccess();
       if (request['action'] == 'status' && controller == null) {
         await _emitBilling({'type': 'state', ..._billingState});
         return;
@@ -273,7 +329,8 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
       if (controller == null) throw const BillingFailure('configuration_required');
       switch (request['action']) {
         case 'status':
-          if (controller.isConfigured && controller.canChangeAccount) {
+          if (!receivedDuringReview && reviewGeneration == _reviewAccess.generation &&
+              !_reviewAccess.active && controller.isConfigured && controller.canChangeAccount) {
             await controller.restore();
           }
           await _emitBilling({'type': 'state', ..._billingState}, epoch: commandEpoch);
@@ -288,9 +345,11 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
           if (offer is! String || reading is! String || requestId == null) {
             throw const BillingFailure('invalid_purchase_context');
           }
+          requireBillingAccess();
           await controller.buy(offer, requestId: requestId, readingId: reading);
           break;
         case 'restore':
+          requireBillingAccess();
           await controller.restore();
           break;
         case 'selectTopic':
@@ -300,6 +359,7 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
           if (grant == null || topic is! String || request['readingId'] != grant.readingId) {
             throw const BillingFailure('invalid_entitlement');
           }
+          requireBillingAccess();
           final selected = await scope!.guard(() => _purchaseVerifier!.selectTopic(grant, topic));
           _grants[selected.entitlementId] = selected;
           await _emitBilling({'type': 'grant', 'entitlement': selected.toJson()}, epoch: commandEpoch);
@@ -313,6 +373,100 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
       await _emitBilling({'type': 'error', 'requestId': requestId,
         'code': error is BillingAuthFailure ? error.code : error is BillingFailure ? error.code : 'billing_request_failed'},
         epoch: authError ? _billingEpoch : commandEpoch);
+    }
+  }
+
+  bool get _canActivateReview => mounted && _applicationActive &&
+      !_billingInitializing && _billingCommandsPending == 0 &&
+      !_accountBilling.busy && _billing?.canChangeAccount != false &&
+      _billingState['busy'] != true &&
+      !const ['pending', 'recovery_required'].contains(_billingState['status']);
+
+  void _onReviewAccessChanged() {
+    _scheduleReviewExpiry();
+    unawaited(_emitReviewAccess());
+  }
+
+  void _scheduleReviewExpiry() {
+    _reviewExpiryTimer?.cancel();
+    _reviewExpiryTimer = null;
+    final remaining = _reviewAccess.remaining;
+    if (remaining != null) {
+      _reviewExpiryTimer = Timer(remaining, () {
+        if (mounted) _reviewAccess.expire(force: true);
+      });
+    }
+  }
+
+  Future<void> _emitReviewAccess() {
+    if (!mounted || !_webPageReady) return Future<void>.value();
+    final next = _reviewJsQueue.then((_) async {
+      if (!mounted || !_webPageReady) return;
+      // Read current state at delivery time; queued events cannot revive it.
+      final payload = _reviewAccess.snapshot;
+      await _web.runJavaScript(
+        'if(window.soulReviewAccessReceive)window.soulReviewAccessReceive(${jsonEncode(payload)});');
+    });
+    _reviewJsQueue = next.catchError((Object _) {});
+    return _reviewJsQueue;
+  }
+
+  Future<void> _onReviewAccess(JavaScriptMessage message) async {
+    if (!mounted) return;
+    _reviewAccess.expire();
+    // Credentials, identities, and URLs are never accepted from the page.
+    switch (message.message) {
+      case 'exit':
+        _reviewAccess.close();
+        await _emitReviewAccess();
+        return;
+      case 'status':
+        await _emitReviewAccess();
+        return;
+      case 'open':
+        if (_reviewDialogOpen || _reviewAccess.active || !_applicationActive) {
+          await _emitReviewAccess();
+          return;
+        }
+        break;
+      default:
+        return;
+    }
+    _reviewDialogOpen = true;
+    try {
+      var language = 'ko';
+      try {
+        final raw = await _web.runJavaScriptReturningResult('document.documentElement.lang');
+        final value = raw is String && raw.startsWith('"') ? jsonDecode(raw) : raw;
+        if (value == 'en' || value == 'ja') language = value as String;
+      } catch (_) {}
+      if (!mounted || !_applicationActive) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _ReviewAccessDialog(
+          language: language,
+          onAuthenticate: (accessCode) => _reviewAccess.open(accessCode,
+            canActivate: () => _canActivateReview),
+          onClosed: _reviewAccess.cancelPending,
+        ),
+      );
+    } finally {
+      _reviewAccess.cancelPending();
+      _reviewDialogOpen = false;
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _applicationActive = state == AppLifecycleState.resumed;
+    if (_applicationActive) {
+      _reviewAccess.resume();
+      _scheduleReviewExpiry();
+      unawaited(_emitReviewAccess());
+    } else {
+      // An HTTP response received after backgrounding requires a new attempt.
+      _reviewAccess.cancelPending();
     }
   }
 
@@ -501,6 +655,9 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _reviewExpiryTimer?.cancel();
+    _reviewAccess.dispose();
     final billing = _billing;
     if (billing != null) unawaited(billing.dispose());
     unawaited(_accountBilling.dispose());
@@ -539,4 +696,137 @@ class _SoulReaderHomeState extends State<SoulReaderHome> {
           ]),
         ),
       );
+}
+
+class _ReviewAccessDialog extends StatefulWidget {
+  const _ReviewAccessDialog({required this.language,
+    required this.onAuthenticate, required this.onClosed});
+
+  final String language;
+  final Future<void> Function(String accessCode) onAuthenticate;
+  final VoidCallback onClosed;
+
+  @override
+  State<_ReviewAccessDialog> createState() => _ReviewAccessDialogState();
+}
+
+class _ReviewAccessDialogState extends State<_ReviewAccessDialog> {
+  final _accessCode = TextEditingController();
+  bool _submitting = false;
+  bool _failed = false;
+  bool _closed = false;
+
+  void _close() {
+    if (_closed) return;
+    _closed = true;
+    _accessCode.clear();
+    widget.onClosed();
+  }
+
+  ({String title, String username, String code, String help, String submit,
+      String cancel, String failure}) get _labels => switch (widget.language) {
+    'en' => (
+      title: 'Review access', username: 'Username', code: 'Access code',
+      help: 'Enter the review credentials. Access lasts for one hour and does not make a purchase.',
+      submit: 'Continue', cancel: 'Cancel',
+      failure: 'Unable to open review access. Check the credentials and try again when billing is idle.',
+    ),
+    'ja' => (
+      title: '審査用アクセス', username: 'ユーザー名', code: 'アクセスコード',
+      help: '審査用の認証情報を入力してください。有効期間は1時間で、購入は行われません。',
+      submit: '続ける', cancel: 'キャンセル',
+      failure: '審査用アクセスを開始できません。認証情報を確認し、購入処理の終了後にもう一度お試しください。',
+    ),
+    _ => (
+      title: '검토용 접근', username: '사용자 이름', code: '접근 코드',
+      help: '검토용 인증 정보를 입력해 주세요. 접근은 1시간 동안 유지되며 구매가 발생하지 않아요.',
+      submit: '계속', cancel: '취소',
+      failure: '검토용 접근을 시작하지 못했어요. 인증 정보를 확인하고 결제 처리가 끝난 뒤 다시 시도해 주세요.',
+    ),
+  };
+
+  Future<void> _submit() async {
+    if (_submitting || _closed) return;
+    setState(() { _submitting = true; _failed = false; });
+    try {
+      final operation = widget.onAuthenticate(_accessCode.text);
+      _accessCode.clear();
+      await operation;
+      if (mounted && !_closed) Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+    } finally {
+      if (mounted) {
+        _accessCode.clear();
+        setState(() => _submitting = false);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _close();
+    _accessCode.clear();
+    _accessCode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final labels = _labels;
+    return PopScope(
+      onPopInvokedWithResult: (didPop, _) { if (didPop) _close(); },
+      child: AlertDialog(
+      title: Text(labels.title),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(labels.help),
+            const SizedBox(height: 16),
+            TextFormField(
+              initialValue: reviewAccessUsername,
+              readOnly: true,
+              decoration: InputDecoration(labelText: labels.username),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _accessCode,
+              autofocus: true,
+              enabled: !_submitting,
+              obscureText: true,
+              autocorrect: false,
+              enableSuggestions: false,
+              enableIMEPersonalizedLearning: false,
+              autofillHints: const [],
+              maxLength: 43,
+              textInputAction: TextInputAction.done,
+              decoration: InputDecoration(labelText: labels.code, counterText: ''),
+              onSubmitted: (_) => _submit(),
+            ),
+            if (_failed) ...[
+              const SizedBox(height: 12),
+              Text(labels.failure, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ],
+            if (_submitting) ...[
+              const SizedBox(height: 12),
+              const LinearProgressIndicator(),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () { _close(); Navigator.of(context).pop(); },
+          child: Text(labels.cancel),
+        ),
+        FilledButton(
+          onPressed: _submitting ? null : _submit,
+          child: Text(labels.submit),
+        ),
+      ],
+      ),
+    );
+  }
 }
