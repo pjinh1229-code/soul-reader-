@@ -3,8 +3,10 @@ import { PLAY_PURCHASE_CATALOG, normalizePlayPurchaseV2, PlayPurchaseValidationE
 import { BillingLedger, BillingServerFailure, fail, publicGrant, secretKey, tokenHash } from './ledger.mjs';
 import { SETUP_PAGE, SETUP_CSP } from './setup_page.mjs';
 import { UPLOAD_RECOVERY_PAGE, UPLOAD_RECOVERY_CSP } from './upload_recovery_page.mjs';
+import { REVIEW_SETUP_PAGE, REVIEW_SETUP_CSP } from './review_setup_page.mjs';
 import { readOperationalDiagnostics, recordOperationalFailure } from './operational_diagnostics.mjs';
 import { legalPageResponse } from './legal_pages.mjs';
+import { reviewAccessResponse, cleanupReviewRateLimits } from './review_access.mjs';
 
 const PACKAGE = 'com.soulreader.soul_reader';
 // Conservative free-Worker bound, including D1 operations and one OAuth refresh
@@ -243,15 +245,16 @@ export function createBillingWorker({ clock = Date.now, authenticateFactory, pub
     try {
       const url = new URL(request.url);
       if (url.protocol !== 'https:') fail('invalid_request');
+      if (url.pathname === '/v1/review-access') return reviewAccessResponse(request, env, clock());
       const legal = legalPageResponse(request);
       if (legal) return legal;
-      if (request.method === 'GET' && ['/setup/service-account', '/setup/upload-key'].includes(url.pathname) && !url.search) {
-        // This page only reads a user-selected file in that user's browser.
-        // It submits no file content and works before runtime secrets are valid.
+      if (request.method === 'GET' && ['/setup/service-account', '/setup/upload-key', '/setup/review-access'].includes(url.pathname) && !url.search) {
+        // Public setup helpers work before runtime secrets are valid.
         const uploadRecovery = url.pathname === '/setup/upload-key';
-        return new Response(uploadRecovery ? UPLOAD_RECOVERY_PAGE : SETUP_PAGE, { headers: {
+        const reviewSetup = url.pathname === '/setup/review-access';
+        return new Response(reviewSetup ? REVIEW_SETUP_PAGE : uploadRecovery ? UPLOAD_RECOVERY_PAGE : SETUP_PAGE, { headers: {
           'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
-          'Content-Security-Policy': uploadRecovery ? UPLOAD_RECOVERY_CSP : SETUP_CSP, 'Referrer-Policy': 'no-referrer',
+          'Content-Security-Policy': reviewSetup ? REVIEW_SETUP_CSP : uploadRecovery ? UPLOAD_RECOVERY_CSP : SETUP_CSP, 'Referrer-Policy': 'no-referrer',
           'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY',
           'Permissions-Policy': 'clipboard-write=(self)',
         } });
@@ -337,6 +340,8 @@ export function createBillingWorker({ clock = Date.now, authenticateFactory, pub
     }
   }
   async function scheduled(_event, env) {
+    try { await cleanupReviewRateLimits(env, clock()); }
+    catch { /* Optional review cleanup must not interrupt normal billing reconciliation. */ }
     const rt = runtime(env);
     let refundFailed = false;
     try { await rt.ledger.syncRefunds(rt.publisher, 2); } catch { refundFailed = true; }

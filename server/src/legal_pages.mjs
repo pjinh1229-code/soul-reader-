@@ -2,7 +2,7 @@
 // purchase records, query parameters, or billing runtime secrets.
 export const SUPPORT_EMAIL = 'jgw98541706@gmail.com';
 export const SERVICE_OPERATOR = 'SOUL READER 운영자';
-export const LEGAL_UPDATED = '2026-10-30';
+export const LEGAL_UPDATED = '2026-11-01';
 
 const escape = value => String(value).replace(/[&<>"']/g,
   character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -26,6 +26,7 @@ export const PRIVACY_PAGE = page('개인정보처리방침', `
 <h2>4. 서비스 제공자와 SDK</h2>
 <p>Google Firebase Authentication은 로그인, Google Play는 결제, Google ML Kit는 기기 내 얼굴 감지, Cloudflare Workers/D1은 구매 확인과 기록 보관에 사용됩니다. Google SDK는 해당 SDK의 정책에 따라 서비스 제공·안정성·진단에 필요한 앱·기기 관련 정보를 처리할 수 있습니다. 앱에는 광고 SDK나 직접 추가한 이용 분석·Crashlytics SDK가 없습니다.</p>
 <p>Google과 Cloudflare의 서비스는 국외 인프라를 사용할 수 있습니다. 제공자의 처리 기준은 <a href="https://policies.google.com/privacy" rel="noreferrer">Google 개인정보처리방침</a>, <a href="https://firebase.google.com/support/privacy" rel="noreferrer">Firebase 개인정보 보호 안내</a>, <a href="https://developers.google.com/ml-kit/android-data-disclosure" rel="noreferrer">ML Kit 데이터 공개 안내</a>, <a href="https://www.cloudflare.com/privacypolicy/" rel="noreferrer">Cloudflare 개인정보처리방침</a>에서 확인할 수 있습니다.</p>
+<p>검토용 계정은 새 Google 계정이나 결제 없이 동일한 풀이 콘텐츠를 확인하는 데 사용합니다. 검토용 접근 코드는 서버에서 확인하며 앱에 영구 저장하거나 웹 화면에 전달하지 않습니다. 반복된 로그인 시도를 제한하기 위해 보안 키로 해시한 IP 식별 정보와 분 단위 요청 횟수를 일시적으로 보관합니다. 이 기록에는 원본 IP, 접근 코드, 이름 또는 사진을 넣지 않습니다. 오래된 요청 횟수 기록은 후속 요청 처리 및 정기 정리 시 삭제하며, 해시 기록을 완전한 익명 정보라고 보장하지 않습니다.</p>
 <h2>5. 보관과 삭제</h2>
 <p>로그인 계정과 그 계정의 서버 구매 기록은 구매 확인과 복원을 제공하는 동안 보관합니다. 계정 및 연결된 데이터 삭제를 요청하면 운영자가 본인 확인과 처리 중인 구매 상태를 확인한 뒤 Firebase 계정, 서버에 연결된 구매·풀이 식별 정보 및 암호화된 구매 토큰을 삭제합니다.</p>
 <p>삭제·취소된 구매의 재사용 방지를 위해 <strong>구매 토큰의 단방향 해시와 처리 시각은 서비스 운영 기간 동안 보관</strong>합니다. 이 기록에는 계정 식별자, 이메일, 원본 구매 토큰 또는 사진을 넣지 않습니다. 해시는 개인정보와 무관한 완전한 익명 정보라고 보장하지 않습니다.</p>
