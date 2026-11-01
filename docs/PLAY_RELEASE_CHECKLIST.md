@@ -2,7 +2,7 @@
 
 2026-10-30 기준. 내부 테스트 v96의 로그인·단일 구매·재시작 복원·새 사진 합본·테스트 환불은 소유자가 성공을 알려주었습니다. **공개 출시, Console 설문 제출과 심사 승인은 아직 확인되지 않았습니다.** 소개·상품 문구는 [PLAY_REGISTRATION_PACKET.md](PLAY_REGISTRATION_PACKET.md)를 사용합니다.
 
-개인정보·계정 삭제 요청 링크를 추가한 **v97 AAB**는 [실제 GitHub 빌드](https://github.com/pjinh1229-code/soul-reader-/actions/runs/40992332915)에서 네이티브 분석·테스트, 원래 업로드 서명, 버전 97, 음원 70개 검사와 아티팩트 업로드를 통과했습니다. Artifacts의 `SOUL_READER_8.5.6_INTERNAL_BILLING_AAB` ZIP을 받아 `SOUL_READER_8.5.6_INTERNAL_BILLING_97.aab`를 사용합니다. GitHub 로그인이 필요합니다. 새 앱의 링크가 기기에서 외부 브라우저로 열리는지 확인하는 작업과 Console 제출은 별도입니다.
+현재 제출 준비 파일은 검토용 접근까지 포함한 **v98 AAB**입니다. [실제 GitHub 빌드](https://github.com/pjinh1229-code/soul-reader-/actions/runs/41269282887)에서 네이티브 분석·테스트, 원래 업로드 서명, 버전 98, 음원 70개 검사와 아티팩트 업로드를 통과했습니다. Artifacts의 `SOUL_READER_8.5.6_INTERNAL_BILLING_AAB` ZIP을 받아 `SOUL_READER_8.5.6_INTERNAL_BILLING_98.aab`를 사용합니다. GitHub 로그인이 필요합니다. 새 앱의 실제 검토용 접속 확인과 Console 제출은 별도입니다. 이전 v97은 검토용 접근 기능이 없습니다.
 
 ## 1. 현재 준비 상태와 남은 결정
 
