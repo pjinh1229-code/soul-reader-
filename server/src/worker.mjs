@@ -246,7 +246,7 @@ export function createBillingWorker({ clock = Date.now, authenticateFactory, pub
       const url = new URL(request.url);
       if (url.protocol !== 'https:') fail('invalid_request');
       if (url.pathname === '/v1/review-access') return reviewAccessResponse(request, env, clock());
-      const legal = legalPageResponse(request);
+      const legal = legalPageResponse(request, env);
       if (legal) return legal;
       if (request.method === 'GET' && ['/setup/service-account', '/setup/upload-key', '/setup/review-access'].includes(url.pathname) && !url.search) {
         // Public setup helpers work before runtime secrets are valid.
