@@ -10,6 +10,9 @@
 
 ## 2026-11-03 확인된 빌드와 배포
 
+- **실제 소유자 ID를 연결한 v100 빌드가 성공했습니다.** [실제 빌드](https://github.com/pjinh1229-code/soul-reader-/actions/runs/41611126453), [LIVE_ADS_100 AAB ZIP](https://github.com/pjinh1229-code/soul-reader-/actions/runs/41611126453/artifacts/13218994827). 앱 소스는 `01afce97094a28ddcf90600cc30a03d4917b2293`, 파일은 `SOUL_READER_8.5.6_INTERNAL_LIVE_ADS_100.aab`입니다. 네이티브 분석·Flutter 테스트(광고 28개 포함), Python 94개, 브라우저·원래 서명·음원 70개 검증을 통과했습니다. 이는 실제 기기의 광고 표시나 AdMob 앱 승인·수익 발생 확인과 구분합니다.
+- 소유자 게시자 파일과 최신 개인정보 안내는 서버 `67636e3ad7e21843042d424322eb292563c263f8`에 반영됐고, [배포 후 네 가지 검사](https://github.com/pjinh1229-code/soul-reader-/actions/runs/41611776309)가 모두 통과했습니다. 공개 `/app-ads.txt`의 정확한 소유자 행까지 검사했으며 AdMob 메뉴의 인증 완료를 뜻하지는 않습니다.
+- 광고 SDK의 공식 데이터 공개 페이지는 정상·확장 권한 요청 모두 403으로 차단됐습니다. 소유자에게 공식 자동 수집·공유 목록과 사용 목적의 원문을 요청했습니다. 데이터 보안 최종 CSV와 Play 제출은 이 내용을 확인한 뒤 마무리합니다. `DO_NOT_SUBMIT` 후보를 제출용으로 사용하지 않습니다.
 - [v99 Android 빌드](https://github.com/pjinh1229-code/soul-reader-/actions/runs/41593760237)가 성공했습니다. 앱 소스는 `66a1740ed7b90343684e8aa4aad32851623e74dc`이며, 이후 문서 수정과 구분합니다.
 - [테스트 AAB ZIP](https://github.com/pjinh1229-code/soul-reader-/actions/runs/41593760237/artifacts/13211314424)은 GitHub 로그인 후 받습니다. 아티팩트 이름은 `SOUL_READER_8.5.6_INTERNAL_TEST_ADS_99_AAB`, 파일 이름은 `SOUL_READER_8.5.6_INTERNAL_TEST_ADS_99.aab`입니다.
 - 네이티브 분석, 신규 광고 28개를 포함한 Flutter 테스트, Python 87개, 광고·결제·검토용 접근·사진·다국어·법적 링크의 브라우저 검사, 원래 업로드 서명과 음원 70개 검증을 통과했습니다. 실제 기기에 설치하여 광고를 확인한 기록은 아직 없습니다.
