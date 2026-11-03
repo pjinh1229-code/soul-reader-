@@ -10,7 +10,8 @@
   },
   "vars": {
     "FIREBASE_PROJECT_ID": "soul-reader-a91f5",
-    "PLAY_PACKAGE_NAME": "com.soulreader.soul_reader"
+    "PLAY_PACKAGE_NAME": "com.soulreader.soul_reader",
+    "ADMOB_PUBLISHER_ID": "pub-1953724823797056"
   },
   "d1_databases": [{
     "binding": "DB",
