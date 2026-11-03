@@ -12,7 +12,7 @@
 
 - **실제 소유자 ID를 연결한 v100 빌드가 성공했습니다.** [실제 빌드](https://github.com/pjinh1229-code/soul-reader-/actions/runs/41611126453), [LIVE_ADS_100 AAB ZIP](https://github.com/pjinh1229-code/soul-reader-/actions/runs/41611126453/artifacts/13218994827). 앱 소스는 `01afce97094a28ddcf90600cc30a03d4917b2293`, 파일은 `SOUL_READER_8.5.6_INTERNAL_LIVE_ADS_100.aab`입니다. 네이티브 분석·Flutter 테스트(광고 28개 포함), Python 94개, 브라우저·원래 서명·음원 70개 검증을 통과했습니다. 이는 실제 기기의 광고 표시나 AdMob 앱 승인·수익 발생 확인과 구분합니다.
 - 소유자 게시자 파일과 최신 개인정보 안내는 서버 `67636e3ad7e21843042d424322eb292563c263f8`에 반영됐고, [배포 후 네 가지 검사](https://github.com/pjinh1229-code/soul-reader-/actions/runs/41611776309)가 모두 통과했습니다. 공개 `/app-ads.txt`의 정확한 소유자 행까지 검사했으며 AdMob 메뉴의 인증 완료를 뜻하지는 않습니다.
-- 광고 SDK의 공식 데이터 공개 페이지는 정상·확장 권한 요청 모두 403으로 차단됐습니다. 소유자에게 공식 자동 수집·공유 목록과 사용 목적의 원문을 요청했습니다. 데이터 보안 최종 CSV와 Play 제출은 이 내용을 확인한 뒤 마무리합니다. `DO_NOT_SUBMIT` 후보를 제출용으로 사용하지 않습니다.
+- 소유자가 제공한 공식 Legacy 데이터 공개 화면에서 자동 수집·공유, 광고·분석·사기 방지 목적, IP 기반 대략적 위치·제품 상호작용·진단·기기 및 조건부 계정 식별자, TLS 전송을 확인했습니다. 전체 가져오기 파일 `/workspace/SOUL_READER_ADMOB_DATA_SAFETY_IMPORT.csv`를 완성하고 원본 783행 형식·응답 변경 29개·8유형 수집/5유형 공유를 검증했습니다. SHA-256은 `eb23e2dd49aa118ba564a14fd8c7817a07657d463c9aaa79ef021854617b6dfa`입니다. Console 가져오기·저장·제출은 아직 소유자 확인 전입니다. `DO_NOT_SUBMIT` 후보와 기존 v98 파일 대신 새 `IMPORT` 파일을 사용합니다.
 - [v99 Android 빌드](https://github.com/pjinh1229-code/soul-reader-/actions/runs/41593760237)가 성공했습니다. 앱 소스는 `66a1740ed7b90343684e8aa4aad32851623e74dc`이며, 이후 문서 수정과 구분합니다.
 - [테스트 AAB ZIP](https://github.com/pjinh1229-code/soul-reader-/actions/runs/41593760237/artifacts/13211314424)은 GitHub 로그인 후 받습니다. 아티팩트 이름은 `SOUL_READER_8.5.6_INTERNAL_TEST_ADS_99_AAB`, 파일 이름은 `SOUL_READER_8.5.6_INTERNAL_TEST_ADS_99.aab`입니다.
 - 네이티브 분석, 신규 광고 28개를 포함한 Flutter 테스트, Python 87개, 광고·결제·검토용 접근·사진·다국어·법적 링크의 브라우저 검사, 원래 업로드 서명과 음원 70개 검증을 통과했습니다. 실제 기기에 설치하여 광고를 확인한 기록은 아직 없습니다.
@@ -20,7 +20,7 @@
 - 소유자의 게시자 ID를 서버 공개 변수 `ADMOB_PUBLISHER_ID`에 반영했습니다. 이 설정의 서버 배포와 실제 `/app-ads.txt` 확인은 후속 검사로 확인합니다. 기존 배포 검사 성공이 새 게시자 파일의 공개까지 증명하지는 않습니다.
 - 다음 Android 대상은 `build/play-ads-live-v100` 브랜치의 **v100 라이브 광고 ID AAB**입니다. 예상 아티팩트 `SOUL_READER_8.5.6_INTERNAL_LIVE_ADS_100_AAB` 안에 `SOUL_READER_8.5.6_INTERNAL_LIVE_ADS_100.aab`, 체크섬, `SOUL_READER_8.5.6_INTERNAL_LIVE_ADS_BUILD_INFO.json`이 들어갑니다. 이 문서 작성 시점에는 해당 CI 성공·아티팩트 생성·Play 업로드를 확인하지 않았습니다.
 - 아직 v99를 Play Console에 업로드했다는 확인은 없습니다. 업로드 후에는 실제 광고 ID를 넣어 새로 컴파일하는 버전에 100 이상, 또는 Console의 최대 코드보다 큰 번호를 사용합니다.
-- 광고 SDK용 데이터 보안 검토는 [추가 검토표](data-safety/ADMOB_ADDENDUM_KO.md)를 따릅니다. 공식 데이터 공개 문서·SDK Index는 이 환경에서 403으로 차단되어 최신 원문을 직접 확인하지 못했으며, 기존 v98 CSV를 광고 버전용으로 변경하거나 제출하지 않았습니다.
+- 광고 SDK용 데이터 보안 판단과 공식 화면 근거는 [추가 검토표](data-safety/ADMOB_ADDENDUM_KO.md)를 따릅니다. HTTP 접근은 차단됐지만 소유자가 제공한 공식 화면으로 확인을 마쳤습니다. 기존 v98 CSV와 백업은 보존했고 광고용 파일을 별도로 생성했습니다.
 
 ## 1. 앱에 들어가는 광고
 
@@ -83,7 +83,7 @@ AdMob **개인정보 보호 및 메시지(Privacy & messaging)**에서 출시 �
 
 개인정보처리방침은 “광고 기능이 포함된 버전에서는”이라는 조건으로 광고 제공자·유형·처리 정보를 설명합니다. 기존 광고 없는 v98의 설명과 구분합니다. 새 정책의 코드 변경, 공개 서버 배포, 실제 공개 페이지 확인은 각각 완료 여부를 확인합니다.
 
-데이터 보안은 [AdMob 추가 검토표](data-safety/ADMOB_ADDENDUM_KO.md)를 사용합니다. 기존 v98 일곱 유형 CSV를 광고 버전에 그대로 재사용하거나, SDK 데이터 공개 원문과 최종 설정 확인 없이 새 가져오기 파일을 제출하지 않습니다.
+데이터 보안은 새 `SOUL_READER_ADMOB_DATA_SAFETY_IMPORT.csv` 전체 파일을 가져온 뒤 미리보기를 확인하고 저장합니다. SDK의 조건부 계정 식별자를 사용자 ID에도 포함하여 공유·필수로 처리한 것은 보수적 분류이며 앱의 Firebase UID를 광고 extras로 보낸다는 뜻이 아닙니다. 근거와 변경 내용은 [AdMob 추가 검토표](data-safety/ADMOB_ADDENDUM_KO.md)에 있습니다. 데이터 보안 CSV는 별도 광고 포함·광고 ID 선언을 자동 변경하지 않으므로 앱 콘텐츠의 광고 포함과 광고 ID 사용을 예로 갱신하고 광고·분석·사기 예방 목적을 반영합니다.
 
 ## 6. 실제 광고 ID로 빌드하고 수익화하기
 
