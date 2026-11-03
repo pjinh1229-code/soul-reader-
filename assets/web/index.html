@@ -429,6 +429,7 @@ $('#app').addEventListener('click',event=>{
 function render(){document.documentElement.lang=state.lang;document.title=`SOUL READER — ${state.lang==='ko'?'저승사자 류':state.lang==='ja'?'死神リュウ':'Meet RYU'}`;$('#app').innerHTML=(ROUTES[state.screen]||intro)();renderLegalSupport();if(state.stream&&state.screen==='photo'){const video=$('#liveVideo');if(video){video.srcObject=state.stream;video.play().catch(()=>{})}}}
 function goto(route){
  if(route==='romance'){state.flirtChoice=null;beginReveal();return}
+ window.SRFreeReadingAds?.routeChanging(route);
  if(route==='themes'&&state.screen==='welcome'&&!state.gwansangSeenSession&&!safeGet('sr61-seen')){state.gwansangAuto=true;state.gwansangReturn='themes';route='gwansang'}
  else if(route==='gwansang'){state.gwansangAuto=false;state.gwansangReturn=state.screen}
  if(state.screen==='gwansang'&&route!=='gwansang'){state.gwansangSeenSession=true;try{localStorage.setItem('sr61-seen','1')}catch{}state.gwansangAuto=false}
@@ -443,7 +444,16 @@ async function capture(){const video=$('#liveVideo');if(!video||!video.videoWidt
 function computeMood(ctx,w,h){const sample=ctx.getImageData(0,0,w,h).data;let lum=0,count=0;const step=Math.max(4,Math.floor(sample.length/(4*900))*4);for(let i=0;i<sample.length;i+=step){lum+=.2126*sample[i]+.7152*sample[i+1]+.0722*sample[i+2];count++}const avg=lum/Math.max(count,1);return avg<77?'lightDark':avg>157?'lightBright':'lightBalanced'}
 function setPhoto(canvas){const ctx=canvas.getContext('2d',{willReadFrequently:true});state.photoMood=computeMood(ctx,canvas.width,canvas.height);state.photoData=canvas.toDataURL('image/jpeg',.80)}
 async function importPhoto(file){if(!state.consent){notify(label('consentRequired'));return}if(!file||!(file.type.startsWith('image/')||/\.(jpe?g|png|webp|gif|heic|heif|bmp)$/i.test(file.name))){notify(label('photoError'));return}if(file.size>15*1024*1024){notify(label('photoError'));return}let url;try{url=URL.createObjectURL(file);const img=new Image();img.src=url;try{await img.decode()}catch{await new Promise((res,rej)=>{if(img.complete&&img.naturalWidth)res();else{img.onload=res;img.onerror=rej}})}if(!img.naturalWidth||!img.naturalHeight)throw new Error('Image cannot be decoded');const scale=Math.min(1,860/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);setPhoto(canvas);render()}catch(e){notify(label('photoError'))}finally{if(url)URL.revokeObjectURL(url)}}
-function beginReveal(){state.resultStep=0;state.reading=buildReading();goto('loading');const p=$('#progressBar');if(p){requestAnimationFrame(()=>p.style.width='100%')}setTimeout(()=>{if(state.screen==='loading')goto('result')},2400)}
+function beginReveal(){
+ if(state.screen==='loading'||window.SRFreeReadingAds?.isPending())return;
+ state.resultStep=0;const reading=state.reading=buildReading();goto('loading');
+ const p=$('#progressBar');if(p)requestAnimationFrame(()=>p.style.width='100%');
+ setTimeout(()=>{
+  if(state.screen!=='loading'||state.reading!==reading)return;
+  const open=()=>{if(state.screen==='loading'&&state.reading===reading)goto('result')};
+  if(window.SRFreeReadingAds)window.SRFreeReadingAds.beforeOpen(reading,open);else open();
+ },2400);
+}
 function archiveSave(){if(!state.reading)return;if(state.archive.some(x=>x.id===state.reading.id)){notify(label('saved'));return}state.archive.unshift({...state.reading});state.archive=state.archive.slice(0,30);try{localStorage.setItem('sr4-archive',JSON.stringify(state.archive));notify(label('saved'))}catch{notify(label('saveTemp'))}}
 async function sharing(){const r=state.reading;if(!r)return;const card=READINGS[r.theme][r.index],text=`SOUL READER ✧ ${card.title[li()]}\n${card.opening[li()]}\n— RYU`;try{if(navigator.share){await navigator.share({title:'SOUL READER',text});return}if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(text);notify(label('shareCopied'));return}const input=document.createElement('textarea');input.value=text;document.body.appendChild(input);input.select();document.execCommand('copy');input.remove();notify(label('shareCopied'))}catch(e){if(e?.name!=='AbortError')notify(label('shareCopied'))}}
 $('#app').addEventListener('click',e=>{const el=e.target.closest('[data-route],[data-lang],[data-theme],[data-feature],[data-action],[data-open]');if(!el)return;const data=el.dataset;if(data.lang){state.lang=data.lang;try{localStorage.setItem('sr4-lang',state.lang)}catch{}render();return}if(data.theme){chooseTheme(data.theme);return}if(data.feature){state.face[data.feature]=Number(data.value);render();return}if(data.route){goto(data.route);return}if(data.open){const r=state.archive.find(x=>x.id===data.open);if(r){state.reading=r;state.resultStep=2;state.theme=r.theme;state.face={...r.face};state.photoData=null;state.photoMood=r.mood;goto('result')}return}switch(data.action){case'toggle-consent':{const oldY=window.scrollY;state.consent=!state.consent;if(!state.consent){state.photoData=null;state.photoMood=null;closeCamera()}render();window.scrollTo({top:oldY,behavior:'instant'});break;}case'open-camera':openCamera();break;case'stop-camera':closeCamera();render();break;case'capture':capture();break;case'skip-photo':state.photoData=null;state.photoMood=null;closeCamera();goto('traits');break;case'flirt-choice':state.flirtChoice=Number(data.choice);render();break;case'next-stage':state.resultStep=Math.min(2,state.resultStep+1);render();window.scrollTo({top:0,behavior:'instant'});break;case'reveal':beginReveal();break;case'save':archiveSave();break;case'share':sharing();break;case'purchase-preview':notify(label('coming'));break;case'delete':if(confirm(label('confirmDelete'))){state.archive=[];try{localStorage.removeItem('sr4-archive')}catch{}render();notify(label('cleared'))}break;}});
@@ -960,6 +970,7 @@ if(audioPreviewFallback&&!audioPreviewTried){
 fail(active,'error');
 });
 async function play(key,force=false){
+if(window.SRFreeReadingAds?.isPending())return;
 if(!settings.voice&&!force)return;
 const loc=state.lang,pack=CLIPS[loc]||{},id=trans(key);
 const seq=++sequence;
@@ -1003,6 +1014,9 @@ function viewChanged(){
  lastSignature=sig;lastVoicePanel856=panel;stopClip();lastStatus856={msg:'',type:'info',clip:''};copyButtons();addClipButtons();
  const key=keyForScene();if(settings.voice&&key)play(key);
 }
+let adsMusicWasPlaying=false;
+window.addEventListener('sr-free-reading-ads-pause',()=>{adsMusicWasPlaying=!bgm.paused;stopClip();bgm.pause()});
+window.addEventListener('sr-free-reading-ads-release',()=>{if(adsMusicWasPlaying&&settings.music)bgm.play().catch(()=>{});adsMusicWasPlaying=false});
 
 const file=document.createElement('input');file.type='file';file.accept='.mp3,audio/mpeg';file.multiple=true;file.hidden=true;document.body.append(file);let chosen='';
 function chooseFile(key=''){chosen=key;file.multiple=!key;file.click()}
@@ -2280,6 +2294,7 @@ reviewSend75('status');
 (()=>{'use strict';
 const $=s=>document.querySelector(s), line=(x)=>{$('#sr70-status').textContent=x;};
 let voice=null;
+window.addEventListener('sr-free-reading-ads-pause',()=>voice?.pause());
 const text={
 ko:{intro:'설치 없이 휴대폰 Chrome에서 사용할 수 있어요. 홈 화면에 추가해 앱처럼 열 수도 있어요.',audio:'류 음성이 재생 중이야.',ok:'재생 파일 확인 완료',no:'소리를 재생할 수 없어. 음량과 브라우저 설정을 확인해줘.',bgm:'배경음악 재생 중',net:'인터넷 연결',netbad:'인터넷 연결 없음',face:'얼굴 분석 모델이 실제 작동하는지는 사진으로 확인해야 해.',secure:'보안 접속(HTTPS)',local:'브라우저 미리보기/로컬 파일에서는 기능 제한 가능',guide:'사진 촬영 팁: 정면 · 밝은 조명 · 안경/머리카락으로 눈 가리지 않기 · 이마에서 턱까지 프레임 안에 넣기. 얼굴이 중앙에 오도록 해줘.'},
 en:{intro:'Open in Chrome on your phone. You can also add it to your home screen.',audio:'RYU voice playing.',ok:'Audio file loaded',no:'Playback failed. Check device sound and browser settings.',bgm:'Music playing',net:'Online',netbad:'Offline',face:'Check actual face detection using a real photo.',secure:'Secure HTTPS',local:'Local file and preview modes may limit features',guide:'Photo tip: face forward, bright even light, eyes visible, entire forehead and chin in the frame.'},
@@ -2302,3 +2317,4 @@ if('serviceWorker' in navigator && location.protocol==='https:')navigator.servic
 
 
 <script src="billing.js"></script>
+<script src="free_reading_ads.js"></script>

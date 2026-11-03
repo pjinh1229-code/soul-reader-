@@ -15,6 +15,8 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import 'face_measure.dart';
 import 'review_access.dart';
+import 'ads/free_reading_ads.dart';
+import 'ads/google_mobile_ads_gateway.dart';
 import 'billing/account_billing_lifecycle.dart';
 import 'billing/auth_session.dart';
 import 'billing/billing_controller.dart';
@@ -74,6 +76,16 @@ class _SoulReaderHomeState extends State<SoulReaderHome> with WidgetsBindingObse
   bool _applicationActive = true;
   bool _billingInitializing = false;
   int _billingCommandsPending = 0;
+  late final FreeReadingAdsController _freeReadingAds;
+  Future<void> _adsCommandQueue = Future<void>.value();
+  Future<void> _adsJsQueue = Future<void>.value();
+  int _adsCommandsPending = 0;
+  int _adsPageEpoch = 0;
+  String? _activeAdsRequestId;
+  String? _activeAdsReadingId;
+  int? _activeAdsPageEpoch;
+  bool _activeAdsRequestCancelled = false;
+  final List<({int epoch, Map<String, dynamic> payload})> _adsOutbox = [];
   Map<String, dynamic> _billingState = {
     'status': 'unconfigured', 'configured': false,
     'storeAvailable': false, 'busy': false, 'products': <Object>[],
@@ -86,6 +98,14 @@ class _SoulReaderHomeState extends State<SoulReaderHome> with WidgetsBindingObse
     _reviewAccess = ReviewAccessSession(
       client: ReviewAccessClient(),
       onChanged: _onReviewAccessChanged,
+    );
+    _freeReadingAds = FreeReadingAdsController(
+      config: FreeReadingAdsConfig.fromEnvironment(),
+      gateway: GoogleMobileAdsGateway(),
+      canPresent: () => _activeAdsRequestId != null &&
+          !_activeAdsRequestCancelled &&
+          _activeAdsPageEpoch == _adsPageEpoch && _canOpenFreeReadingAd,
+      onChanged: () => unawaited(_emitFreeReadingAdsState()),
     );
     _web = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -104,8 +124,13 @@ class _SoulReaderHomeState extends State<SoulReaderHome> with WidgetsBindingObse
       ..addJavaScriptChannel('StoreBilling', onMessageReceived: _onBillingMessage)
       ..addJavaScriptChannel('LegalSupport', onMessageReceived: _onLegalSupport)
       ..addJavaScriptChannel('ReviewAccess', onMessageReceived: _onReviewAccess)
+      ..addJavaScriptChannel('FreeReadingAds', onMessageReceived: _onFreeReadingAds)
       ..setNavigationDelegate(NavigationDelegate(
-        onPageStarted: (_) => _webPageReady = false,
+        onPageStarted: (_) {
+          _webPageReady = false;
+          _adsPageEpoch++;
+          _adsOutbox.clear();
+        },
         onNavigationRequest: (request) {
           final uri = Uri.tryParse(request.url);
           final trusted = uri != null && uri.scheme == 'file' &&
@@ -125,6 +150,8 @@ class _SoulReaderHomeState extends State<SoulReaderHome> with WidgetsBindingObse
           }
           await _emitBilling({'type': 'state', ..._billingState});
           await _emitReviewAccess();
+          await _emitFreeReadingAdsState();
+          await _flushFreeReadingAds();
         },
       ));
     _accountBilling = AccountBillingLifecycle(
@@ -287,6 +314,9 @@ class _SoulReaderHomeState extends State<SoulReaderHome> with WidgetsBindingObse
           (request['epoch'] != null && request['epoch'] != _billingEpoch)) return;
       final statusOnly = request['action'] == 'status';
       void requireBillingAccess() {
+        if (_adsCommandsPending > 0) {
+          throw const BillingFailure('purchase_busy');
+        }
         if (receivedDuringReview || _reviewAccess.active ||
             reviewGeneration != _reviewAccess.generation) {
           throw const BillingFailure('review_mode_active');
@@ -318,6 +348,10 @@ class _SoulReaderHomeState extends State<SoulReaderHome> with WidgetsBindingObse
         await _emitBilling({'type': 'entitlements',
           'entitlements': _grants.values.map((grant) => grant.toJson()).toList()});
         await _emitReviewAccess();
+        return;
+      }
+      if (statusOnly && _adsCommandsPending > 0) {
+        await _emitBilling({'type': 'state', ..._billingState});
         return;
       }
       if (!statusOnly) requireBillingAccess();
@@ -377,6 +411,7 @@ class _SoulReaderHomeState extends State<SoulReaderHome> with WidgetsBindingObse
   }
 
   bool get _canActivateReview => mounted && _applicationActive &&
+      _adsCommandsPending == 0 &&
       !_billingInitializing && _billingCommandsPending == 0 &&
       !_accountBilling.busy && _billing?.canChangeAccount != false &&
       _billingState['busy'] != true &&
@@ -424,7 +459,8 @@ class _SoulReaderHomeState extends State<SoulReaderHome> with WidgetsBindingObse
         await _emitReviewAccess();
         return;
       case 'open':
-        if (_reviewDialogOpen || _reviewAccess.active || !_applicationActive) {
+        if (_reviewDialogOpen || _reviewAccess.active || !_applicationActive ||
+            _adsCommandsPending > 0) {
           await _emitReviewAccess();
           return;
         }
@@ -460,14 +496,134 @@ class _SoulReaderHomeState extends State<SoulReaderHome> with WidgetsBindingObse
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _applicationActive = state == AppLifecycleState.resumed;
+    _freeReadingAds.setForeground(_applicationActive);
     if (_applicationActive) {
       _reviewAccess.resume();
       _scheduleReviewExpiry();
       unawaited(_emitReviewAccess());
+      unawaited(_flushFreeReadingAds());
     } else {
       // An HTTP response received after backgrounding requires a new attempt.
       _reviewAccess.cancelPending();
     }
+  }
+
+  bool get _canOpenFreeReadingAd => mounted && _applicationActive &&
+      _webPageReady && !_reviewAccess.active && !_reviewDialogOpen &&
+      !_reviewAccess.authenticating && !_busy && !_legalSupportOpen &&
+      !_billingInitializing && _billingCommandsPending == 0 &&
+      !_accountBilling.busy && _billing?.canChangeAccount != false &&
+      _billingState['busy'] != true &&
+      !const ['pending', 'recovery_required'].contains(_billingState['status']);
+
+  void _onFreeReadingAds(JavaScriptMessage message) {
+    if (!mounted || message.message.length > 4096) return;
+    try {
+      final request = jsonDecode(message.message);
+      if (request is Map<String, dynamic> && request['action'] == 'cancel') {
+        if (request['requestId'] == _activeAdsRequestId &&
+            request['readingId'] == _activeAdsReadingId) {
+          _activeAdsRequestCancelled = true;
+        }
+        return;
+      }
+    } catch (_) {
+      return;
+    }
+    final pageEpoch = _adsPageEpoch;
+    _adsCommandsPending++;
+    _adsCommandQueue = _adsCommandQueue
+        .then((_) => _handleFreeReadingAds(message.message, pageEpoch))
+        .whenComplete(() { _adsCommandsPending--; })
+        .catchError((Object _) {});
+  }
+
+  Future<void> _handleFreeReadingAds(String raw, int pageEpoch) async {
+    String? requestId;
+    var readingId = '';
+    var status = 'skipped';
+    var reason = 'unavailable';
+    try {
+      final request = jsonDecode(raw);
+      if (request is! Map<String, dynamic>) return;
+      final token = request['requestId'];
+      final reading = request['readingId'];
+      if (token is! String || token.isEmpty || token.length > 160 ||
+          !RegExp(r'^[A-Za-z0-9_-]+$').hasMatch(token) ||
+          reading is! String || reading.length > 128 ||
+          !RegExp(r'^[A-Za-z0-9_-]*$').hasMatch(reading)) return;
+      requestId = token;
+      readingId = reading;
+      _activeAdsRequestId = requestId;
+      _activeAdsReadingId = readingId;
+      _activeAdsPageEpoch = pageEpoch;
+      _activeAdsRequestCancelled = false;
+      if (pageEpoch != _adsPageEpoch || !_canOpenFreeReadingAd) return;
+      switch (request['action']) {
+        case 'show':
+          if (readingId.isEmpty || _grants.values.any((grant) =>
+              grant.isValid && grant.readingId == readingId)) return;
+          final result = await _freeReadingAds.showForReading(readingId);
+          status = result == FreeReadingAdResult.dismissed ? 'completed' : 'skipped';
+          reason = result.name;
+          break;
+        case 'privacy':
+          await _freeReadingAds.showPrivacyOptions();
+          status = 'completed';
+          reason = 'privacy';
+          break;
+        default:
+          reason = 'invalid_request';
+      }
+    } catch (_) {
+      // Advertising cannot make an otherwise free reading inaccessible.
+      reason = 'unavailable';
+    } finally {
+      _activeAdsRequestId = null;
+      _activeAdsReadingId = null;
+      _activeAdsPageEpoch = null;
+      _activeAdsRequestCancelled = false;
+      if (requestId != null && mounted && pageEpoch == _adsPageEpoch) {
+        _adsOutbox.add((epoch: pageEpoch, payload: {
+          'requestId': requestId, 'readingId': readingId,
+          'status': status, 'reason': reason,
+        }));
+        await _flushFreeReadingAds();
+      }
+    }
+  }
+
+  Future<void> _emitFreeReadingAdsState() async {
+    if (!mounted || !_webPageReady) return;
+    try {
+      final state = {
+        'enabled': _freeReadingAds.available,
+        'privacyOptionsRequired': _freeReadingAds.privacyOptionsRequired,
+      };
+      await _web.runJavaScript(
+        'if(window.SRFreeReadingAds)window.SRFreeReadingAds.setState(${jsonEncode(state)});');
+    } catch (_) {
+      // A page reload will request the current state after loading again.
+    }
+  }
+
+  Future<void> _flushFreeReadingAds() {
+    final next = _adsJsQueue.then((_) async {
+      if (!mounted || !_webPageReady || !_applicationActive) return;
+      final pending = List.of(_adsOutbox);
+      _adsOutbox.clear();
+      for (final response in pending) {
+        if (response.epoch != _adsPageEpoch) continue;
+        try {
+          await _web.runJavaScript(
+            'if(window.SRFreeReadingAds)window.SRFreeReadingAds.receive(${jsonEncode(response.payload)});');
+        } catch (_) {
+          // Only this page/request can use the callback; never replay on reload.
+        }
+      }
+    });
+    _adsJsQueue = next.catchError((Object _) {});
+    return _adsJsQueue;
   }
 
   Future<void> _onLegalSupport(JavaScriptMessage message) async {
@@ -658,6 +814,7 @@ class _SoulReaderHomeState extends State<SoulReaderHome> with WidgetsBindingObse
     WidgetsBinding.instance.removeObserver(this);
     _reviewExpiryTimer?.cancel();
     _reviewAccess.dispose();
+    _freeReadingAds.dispose();
     final billing = _billing;
     if (billing != null) unawaited(billing.dispose());
     unawaited(_accountBilling.dispose());

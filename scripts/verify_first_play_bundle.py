@@ -14,7 +14,12 @@ import subprocess
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
+import zipfile
 
+from ads_configuration import (
+    APP_ID_METADATA, DELAY_MEASUREMENT_METADATA, MODE_METADATA, UNIT_ID_METADATA, MIN_ADS_VERSION_CODE,
+    AdsConfiguration, AdsConfigurationError, resolve_ads,
+)
 import verify_assets
 
 
@@ -75,7 +80,8 @@ def _run(command: list[str], label: str, *, include_stderr: bool = False) -> str
     return output
 
 
-def validate_manifest(xml: str, expected_version_code: int = VERSION_CODE) -> dict:
+def validate_manifest(xml: str, expected_version_code: int = VERSION_CODE,
+                      expected_ads: AdsConfiguration | None = None) -> dict:
     expected_version_code = _version_code(expected_version_code)
     if '<!DOCTYPE' in xml.upper():
         raise BundleVerificationError('Manifest document types are not permitted.')
@@ -104,7 +110,7 @@ def validate_manifest(xml: str, expected_version_code: int = VERSION_CODE) -> di
     version = metadata[0].get(ANDROID + 'value', '') if len(metadata) == 1 else ''
     if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?', version):
         raise BundleVerificationError('Bundle billing-client version metadata is missing or invalid.')
-    return {
+    info = {
         'packageName': PACKAGE,
         'versionCode': expected_version_code,
         'versionName': VERSION_NAME,
@@ -112,6 +118,20 @@ def validate_manifest(xml: str, expected_version_code: int = VERSION_CODE) -> di
         'billingPermission': BILLING_PERMISSION,
         'billingClientVersion': version,
     }
+    if expected_ads is not None:
+        if expected_version_code < MIN_ADS_VERSION_CODE:
+            raise BundleVerificationError('Ads bundles require version code 99 or greater; version 98 is already used.')
+        for name, expected in ((APP_ID_METADATA, expected_ads.app_id),
+                               (DELAY_MEASUREMENT_METADATA, 'true'),
+                               (MODE_METADATA, expected_ads.mode),
+                               (UNIT_ID_METADATA, expected_ads.interstitial_id)):
+            entries = [item for item in application.findall('meta-data')
+                       if item.get(ANDROID + 'name') == name]
+            if (len(entries) != 1 or entries[0].get(ANDROID + 'value') != expected
+                    or entries[0].get(ANDROID + 'resource') is not None):
+                raise BundleVerificationError('Bundle AdMob metadata must exactly match the validated ads configuration.')
+        info.update(expected_ads.public_info())
+    return info
 
 
 def _certificate_der(text: str) -> bytes:
@@ -159,22 +179,36 @@ def verify_signature(bundle: Path, certificate: Path,
 def verify_bundle(bundle: Path, bundletool: Path, certificate: Path,
                   project_root: Path | None = None, *,
                   expected_version_code: int = VERSION_CODE,
-                  expected_certificate_sha256: str | None = None) -> dict:
+                  expected_certificate_sha256: str | None = None,
+                  expected_ads: AdsConfiguration | None = None) -> dict:
     expected_version_code = _version_code(expected_version_code)
     expected_certificate_sha256 = _certificate_sha256(expected_certificate_sha256)
+    if expected_version_code >= MIN_ADS_VERSION_CODE and expected_ads is None:
+        raise BundleVerificationError('Ads-mode verification is required for new bundles (version code 99 or greater).')
+    if expected_ads is not None:
+        checked_ads = resolve_ads({'ADS_MODE': expected_ads.mode,
+                                  'ADMOB_ANDROID_APP_ID': expected_ads.app_id,
+                                  'ADMOB_INTERSTITIAL_AD_UNIT_ID': expected_ads.interstitial_id})
+        if checked_ads != expected_ads:
+            raise BundleVerificationError('Expected AdMob IDs must match the selected ads mode.')
     if sha256_file(bundletool) != BUNDLETOOL_SHA256:
         raise BundleVerificationError('Official bundletool SHA-256 does not match the pinned release.')
     _run(['java', '-jar', str(bundletool), 'validate', '--bundle=' + str(bundle)],
          'Bundletool validation')
     xml = _run(['java', '-jar', str(bundletool), 'dump', 'manifest',
                 '--bundle=' + str(bundle), '--module=base'], 'Bundle manifest inspection')
-    info = validate_manifest(xml, expected_version_code)
+    info = validate_manifest(xml, expected_version_code, expected_ads)
     info['uploadCertificateSha256'] = verify_signature(bundle, certificate,
                                                      expected_certificate_sha256)
     root = project_root or Path(__file__).resolve().parent.parent
     expected = verify_assets.verify_source(root)
     if len(expected) != 70 or verify_assets.verify_archive(bundle, expected) != 'AAB':
         raise BundleVerificationError('Expected 70 original audio files inside an AAB.')
+    if expected_ads is not None:
+        bridge = 'assets/web/free_reading_ads.js'
+        with zipfile.ZipFile(bundle) as archive:
+            if archive.read('base/assets/flutter_assets/' + bridge) != (root / bridge).read_bytes():
+                raise BundleVerificationError('Bundle free-reading ad bridge does not match the verified source.')
     info['originalAudioFiles'] = 70
     info['aabSha256'] = sha256_file(bundle)
     source_commit = os.environ.get('GITHUB_SHA')
@@ -210,18 +244,25 @@ def main(argv: list[str] | None = None) -> int:
                         help='Expected Android version code (default: 95).')
     parser.add_argument('--certificate-sha256',
                         help='Expected upload-certificate SHA-256, as 64 hexadecimal characters.')
+    parser.add_argument('--ads-mode', choices=['off', 'test', 'live'],
+                        help='Required for version 99+: verify manifest ads mode and public IDs. Live IDs come from environment variables.')
     args = parser.parse_args(argv)
     try:
         expected_version_code = _version_code(args.version_code)
         expected_certificate_sha256 = _certificate_sha256(args.certificate_sha256)
+        expected_ads = resolve_ads({**os.environ, 'ADS_MODE': args.ads_mode}) if args.ads_mode else None
         if args.output.is_symlink() or args.output.resolve() in {
                 args.bundle.resolve(), args.bundletool.resolve(), args.certificate.resolve()}:
             raise BundleVerificationError('Public report must not replace a verification input.')
-        info = verify_bundle(args.bundle, args.bundletool, args.certificate,
-                             expected_version_code=expected_version_code,
-                             expected_certificate_sha256=expected_certificate_sha256)
+        expectations = {
+            'expected_version_code': expected_version_code,
+            'expected_certificate_sha256': expected_certificate_sha256,
+        }
+        if expected_ads is not None:
+            expectations['expected_ads'] = expected_ads
+        info = verify_bundle(args.bundle, args.bundletool, args.certificate, **expectations)
         _write_public_report(args.output, info)
-    except (BundleVerificationError, verify_assets.VerificationError) as error:
+    except (BundleVerificationError, AdsConfigurationError, verify_assets.VerificationError) as error:
         print('First Play bundle verification failed: ' + str(error), file=sys.stderr)
         return 1
     except Exception:
