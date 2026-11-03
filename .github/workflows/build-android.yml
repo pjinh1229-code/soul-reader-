@@ -2,7 +2,7 @@ name: Build SOUL READER Android
 
 on:
   push:
-    branches: [main, feat/play-billing-8.5.6, build/play-ads-v99]
+    branches: [main, feat/play-billing-8.5.6, build/play-ads-v99, build/play-ads-live-v100]
   workflow_dispatch:
     inputs:
       artifact_type:
@@ -15,9 +15,9 @@ on:
       version_code:
         description: Internal AAB version code, greater than any previous Play upload
         type: string
-        default: '99'
+        default: '100'
       ads_mode:
-        description: Ads mode (test uses Google test IDs; live requires owner AdMob repository variables)
+        description: Ads mode (test uses Google test IDs; live uses owner public IDs with optional repository variable overrides)
         type: choice
         default: test
         options:
@@ -52,7 +52,8 @@ jobs:
 
   android-debug-apk:
     if: >-
-      !(github.event_name == 'push' && github.ref == 'refs/heads/build/play-ads-v99') &&
+      !(github.event_name == 'push' &&
+        (github.ref == 'refs/heads/build/play-ads-v99' || github.ref == 'refs/heads/build/play-ads-live-v100')) &&
       (github.event_name != 'workflow_dispatch' || inputs.artifact_type != 'internal_aab')
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -241,15 +242,16 @@ jobs:
   android-internal-aab:
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.artifact_type == 'internal_aab') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/build/play-ads-v99')
+      (github.event_name == 'push' &&
+        (github.ref == 'refs/heads/build/play-ads-v99' || github.ref == 'refs/heads/build/play-ads-live-v100'))
     needs: billing-server
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
-      SOUL_INTERNAL_VERSION_CODE: ${{ github.event_name == 'push' && '99' || inputs.version_code || '99' }}
-      ADS_MODE: ${{ github.event_name == 'push' && 'test' || inputs.ads_mode || 'test' }}
-      ADMOB_ANDROID_APP_ID: ${{ vars.ADMOB_ANDROID_APP_ID }}
-      ADMOB_INTERSTITIAL_AD_UNIT_ID: ${{ vars.ADMOB_INTERSTITIAL_AD_UNIT_ID }}
+      SOUL_INTERNAL_VERSION_CODE: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/build/play-ads-live-v100' && '100' || '99') || inputs.version_code || '100' }}
+      ADS_MODE: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/build/play-ads-live-v100' && 'live' || 'test') || inputs.ads_mode || 'test' }}
+      ADMOB_ANDROID_APP_ID: ${{ github.event_name == 'workflow_dispatch' && vars.ADMOB_ANDROID_APP_ID || '' }}
+      ADMOB_INTERSTITIAL_AD_UNIT_ID: ${{ github.event_name == 'workflow_dispatch' && vars.ADMOB_INTERSTITIAL_AD_UNIT_ID || '' }}
     steps:
       - name: Checkout project
         uses: actions/checkout@v4

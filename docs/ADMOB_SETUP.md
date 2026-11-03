@@ -1,6 +1,12 @@
 # SOUL READER AdMob 설정과 광고 출시
 
-첫 광고 확인용 **v99는 Google 테스트 광고 전용**입니다. 테스트 광고에서는 수익이 발생하지 않습니다. 소유자는 AdMob 가입과 앱 등록을 마쳤고 Android 앱 ID `ca-app-pub-1953724823797056~3357612802`를 제공했습니다. 전면 광고 단위 ID는 아직 제공되지 않았습니다. 실제 광고 수익화가 완료된 것은 아닙니다. 이미 사용한 v98의 파일이나 버전 코드는 바꾸지 않습니다.
+첫 광고 확인용 **v99는 Google 테스트 광고 전용**입니다. 테스트 광고에서는 수익이 발생하지 않습니다. 소유자는 AdMob 가입·앱 등록·일반 전면 광고 단위 생성을 마치고 아래 공개 ID를 제공했습니다. 이 ID로 **v100 라이브 광고 빌드를 준비**하며, 아직 v100 CI 성공이나 AAB 다운로드를 확인한 것은 아닙니다. 실제 광고 송출·수익화는 AdMob의 앱 인증·준비 상태 및 정책 설정을 별도로 확인해야 합니다. 이미 사용한 v98·v99 파일이나 버전 코드를 덮어쓰지 않습니다.
+
+| 소유자 공개 설정 | 값 |
+| --- | --- |
+| Android 앱 ID | `ca-app-pub-1953724823797056~3357612802` |
+| 일반 전면 광고 단위 ID | `ca-app-pub-1953724823797056/8725936661` |
+| 게시자 ID | `pub-1953724823797056` |
 
 ## 2026-11-03 확인된 빌드와 배포
 
@@ -8,6 +14,8 @@
 - [테스트 AAB ZIP](https://github.com/pjinh1229-code/soul-reader-/actions/runs/41593760237/artifacts/13211314424)은 GitHub 로그인 후 받습니다. 아티팩트 이름은 `SOUL_READER_8.5.6_INTERNAL_TEST_ADS_99_AAB`, 파일 이름은 `SOUL_READER_8.5.6_INTERNAL_TEST_ADS_99.aab`입니다.
 - 네이티브 분석, 신규 광고 28개를 포함한 Flutter 테스트, Python 87개, 광고·결제·검토용 접근·사진·다국어·법적 링크의 브라우저 검사, 원래 업로드 서명과 음원 70개 검증을 통과했습니다. 실제 기기에 설치하여 광고를 확인한 기록은 아직 없습니다.
 - 공개 광고 안내·개인정보처리방침 코드는 서버 `main`의 `b7227eb273f3f94987404a2181aa7d716b23afb1`에 반영됐고, [배포 후 네 가지 검사](https://github.com/pjinh1229-code/soul-reader-/actions/runs/41593953403)가 통과했습니다. 이 서버 브랜치를 새 Android 앱 소스로 사용하지 않습니다.
+- 소유자의 게시자 ID를 서버 공개 변수 `ADMOB_PUBLISHER_ID`에 반영했습니다. 이 설정의 서버 배포와 실제 `/app-ads.txt` 확인은 후속 검사로 확인합니다. 기존 배포 검사 성공이 새 게시자 파일의 공개까지 증명하지는 않습니다.
+- 다음 Android 대상은 `build/play-ads-live-v100` 브랜치의 **v100 라이브 광고 ID AAB**입니다. 예상 아티팩트 `SOUL_READER_8.5.6_INTERNAL_LIVE_ADS_100_AAB` 안에 `SOUL_READER_8.5.6_INTERNAL_LIVE_ADS_100.aab`, 체크섬, `SOUL_READER_8.5.6_INTERNAL_LIVE_ADS_BUILD_INFO.json`이 들어갑니다. 이 문서 작성 시점에는 해당 CI 성공·아티팩트 생성·Play 업로드를 확인하지 않았습니다.
 - 아직 v99를 Play Console에 업로드했다는 확인은 없습니다. 업로드 후에는 실제 광고 ID를 넣어 새로 컴파일하는 버전에 100 이상, 또는 Console의 최대 코드보다 큰 번호를 사용합니다.
 - 광고 SDK용 데이터 보안 검토는 [추가 검토표](data-safety/ADMOB_ADDENDUM_KO.md)를 따릅니다. 공식 데이터 공개 문서·SDK Index는 이 환경에서 403으로 차단되어 최신 원문을 직접 확인하지 못했으며, 기존 v98 CSV를 광고 버전용으로 변경하거나 제출하지 않았습니다.
 
@@ -52,15 +60,15 @@ GitHub Actions의 **Build SOUL READER Android → Run workflow**에서 `artifact
 
 실제 수익화 전에는 AdMob 화면의 **앱 준비 상태 / 앱 인증 / 정책 센터**에서 필요한 조치를 완료해야 합니다. 새 앱에 요구되는 `app-ads.txt` 확인을 건너뛰지 않습니다. AAB를 내부 테스트에 업로드한 것만으로 공개 스토어 연결과 앱 승인이 끝나는 것은 아닙니다.
 
-1. Google Play 스토어의 개발자 연락처 **웹사이트**에 소유자가 관리하는 공개 웹사이트를 등록합니다. 개인정보처리방침 칸과 별개입니다. 이 서버의 준비된 주소는 `https://soul-reader-billing.jgw98541706.workers.dev/`이며, `/privacy`·`/delete-account`로 연결되는 서비스 안내를 제공합니다. 서버 코드가 배포된 뒤 공개 접속을 먼저 확인합니다.
-2. Cloudflare의 기존 `soul-reader-billing` Worker **설정 → 변수 및 시크릿**에서 **텍스트 변수** `ADMOB_PUBLISHER_ID`에 소유자의 실제 `pub-16자리`를 넣습니다. 비밀 값이 아니며 기존 인증·구매 키를 변경하지 않습니다. 이 문서에는 실제 값이 아직 없습니다.
+1. Google Play 스토어의 개발자 연락처 **웹사이트**에 소유자가 관리하는 공개 웹사이트를 등록합니다. 개인정보처리방침 칸과 별개입니다. 공개 주소는 `https://soul-reader-billing.jgw98541706.workers.dev/`이며, `/privacy`·`/delete-account`로 연결되는 서비스 안내를 제공합니다.
+2. 서버 [wrangler.jsonc](../server/wrangler.jsonc)의 공개 변수 `ADMOB_PUBLISHER_ID`는 `pub-1953724823797056`으로 설정했습니다. 서버 배포 후 Cloudflare의 기존 `soul-reader-billing` Worker에서 같은 텍스트 변수가 적용되었는지 확인합니다. 비밀 값이 아니며 기존 인증·구매 키는 변경하지 않습니다.
 3. 같은 웹사이트 호스트의 루트 `/app-ads.txt`를 로그인 없이 열어 AdMob이 제시한 행과 정확히 같은지 확인합니다.
 
    ```text
-   google.com, 소유자의 실제 pub-16자리, DIRECT, f08c47fec0942fa0
+   google.com, pub-1953724823797056, DIRECT, f08c47fec0942fa0
    ```
 
-   위 설명 문구를 파일이나 변수에 붙여 넣지 마세요. 서버는 형식이 맞는 실제 소유자 ID가 설정된 경우에만 행을 생성합니다. 미설정·형식 오류·Google 테스트 게시자·모든 자리가 0인 값이면 **404**입니다. 테스트용 가짜 판매자 파일은 만들지 않습니다. 형식 검사만으로 계정 소유권을 증명하지는 않습니다.
+   서버는 형식이 맞는 소유자 ID가 설정된 경우에만 행을 생성합니다. 미설정·형식 오류·Google 테스트 게시자·모든 자리가 0인 값이면 **404**입니다. 테스트용 가짜 판매자 파일은 만들지 않습니다. 형식 검사만으로 계정 소유권을 증명하지는 않습니다. 배포 후 공개 검사는 웹사이트·광고 조건부 개인정보 안내·계정 삭제 페이지와 위 판매자 행을 모두 확인합니다.
 4. AdMob에 공개 Google Play 스토어 앱 링크를 연결합니다. AdMob 화면에서 인식한 개발자 웹사이트와 실제로 크롤링하는 `app-ads.txt` URL을 확인하고 **업데이트 확인/인증**을 진행합니다. 크롤링과 검토에는 시간이 걸릴 수 있습니다. `workers.dev` 호스트를 입력한 것만으로 도메인 인식과 인증 성공을 보장하지 않습니다. AdMob이 다른 호스트를 찾거나 해당 주소를 지원하지 않으면 소유자가 관리하는 도메인을 연결하고, 그 도메인의 루트에 같은 파일이 제공되도록 설정합니다.
 5. `app-ads.txt` 인증, 앱 준비 상태의 광고 게재 승인, 계정/정책 제한 유무를 각각 확인합니다. 승인 전 실제 광고가 안 나오는 현상을 코드에서 강제로 우회하지 않습니다.
 
@@ -76,7 +84,7 @@ AdMob **개인정보 보호 및 메시지(Privacy & messaging)**에서 출시 �
 
 ## 6. 실제 광고 ID로 빌드하고 수익화하기
 
-실제 소유자의 앱 ID와 전면 광고 단위 ID가 준비되면 `live` 빌드를 만들 수 있습니다. 앱 인증·게재 승인·정산 완료는 빌드와 별개입니다. 배포와 실제 광고 송출에 맞춰 다음 설정을 마무리합니다.
+실제 소유자의 앱 ID와 전면 광고 단위 ID가 준비되어 `live` 빌드를 만들 수 있습니다. **AdMob 앱 인증·게재 승인은 컴파일의 선행 조건이 아닙니다.** 계정·앱이 실제 광고를 송출할 수 있는지 확인하고 배포 시점에 다음 설정을 마무리합니다.
 
 - [ ] 소유자 AdMob 계정·Android 앱·일반 전면 광고 단위가 준비됨
 - [ ] 공개 스토어 앱 연결, AdMob 앱 인증/준비 상태 및 정책 센터 확인 완료
@@ -85,7 +93,9 @@ AdMob **개인정보 보호 및 메시지(Privacy & messaging)**에서 출시 �
 - [ ] 개인정보처리방침 배포 및 Play의 광고 포함·데이터 보안 신고 갱신
 - [ ] 테스트 광고로 새 풀이 한 번/다시 열기/유료/검토/오류 복귀 확인 완료
 
-GitHub 저장소 **Settings → Secrets and variables → Actions → Variables**에 공개 변수 `ADMOB_ANDROID_APP_ID`와 `ADMOB_INTERSTITIAL_AD_UNIT_ID`를 저장합니다. 두 값의 게시자 부분이 같은 소유자 계정이어야 합니다. 그다음 **Run workflow**에서 `artifact_type=internal_aab`, 기존 모든 업로드보다 큰 `version_code`, `ads_mode=live`를 선택합니다. 기본값은 테스트이며 공개 변수를 저장하는 것만으로 실제 광고 모드로 바뀌지 않습니다. 라이브 모드에서 ID 누락·잘못된 형식·Google 샘플 ID는 빌드를 중단합니다.
+위 두 소유자 ID는 [공개 빌드 설정](../release/admob/public-config.json)에 저장합니다. `live` 모드에서는 환경 변수에 없는 ID를 이 파일에서 가져옵니다. 나중에 소유자 설정을 바꾸는 경우 GitHub 저장소 **Settings → Secrets and variables → Actions → Variables**의 `ADMOB_ANDROID_APP_ID`와 `ADMOB_INTERSTITIAL_AD_UNIT_ID`로 덮어쓸 수 있습니다. 두 값의 게시자 부분은 같은 소유자 계정이어야 합니다. 일부만 덮어써 게시자가 달라지거나 ID 형식이 틀리면 빌드를 중단하며, 실패 시 테스트 ID로 조용히 바뀌지 않습니다.
+
+**Run workflow**에서 `artifact_type=internal_aab`, 기존 모든 업로드보다 큰 `version_code`(이번 대상은 `100`), `ads_mode=live`를 선택합니다. 수동 실행의 광고 기본값은 `test`입니다. `build/play-ads-live-v100` 푸시는 `live`·`100`, 기존 `build/play-ads-v99` 푸시는 `test`·`99`로 고정됩니다. 공개 ID 파일이나 변수를 저장하는 것만으로 광고 모드는 바뀌지 않습니다. `off`와 `test`는 소유자 ID 대신 Google 테스트 ID를 사용합니다. 라이브 모드에서 ID 누락·잘못된 형식·Google 샘플 ID는 빌드를 중단합니다.
 
 `off`는 광고 요청을 끄는 빌드 모드입니다. SDK를 포함한 빌드를 과거의 SDK 없는 v98과 동일하다고 신고하지 않습니다. 최종 설치 AAB의 포함 SDK와 실제 초기화·통신 범위를 확인합니다.
 

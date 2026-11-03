@@ -23,6 +23,8 @@ import verify_first_play_bundle as VERIFY
 LIVE = {'ADS_MODE': 'live',
         'ADMOB_ANDROID_APP_ID': 'ca-app-pub-6123456789012345~1234567890',
         'ADMOB_INTERSTITIAL_AD_UNIT_ID': 'ca-app-pub-6123456789012345/9876543210'}
+OWNER = {'ADMOB_ANDROID_APP_ID': 'ca-app-pub-1953724823797056~3357612802',
+         'ADMOB_INTERSTITIAL_AD_UNIT_ID': 'ca-app-pub-1953724823797056/8725936661'}
 MANIFEST = '''<manifest xmlns:android="http://schemas.android.com/apk/res/android"
  package="com.soulreader.soul_reader" android:versionCode="99" android:versionName="8.5.6">
  <uses-permission android:name="com.android.vending.BILLING"/>
@@ -53,7 +55,7 @@ class AdsModeTests(unittest.TestCase):
         self.assertEqual(config.public_info()['AdsMode'], 'live')
         self.assertFalse(config.public_info()['IsTest'])
 
-    def test_invalid_or_missing_live_ids_never_fall_back_to_test(self):
+    def test_missing_without_public_file_and_invalid_live_ids_never_fall_back_to_test(self):
         cases = [{}, {'ADMOB_ANDROID_APP_ID': LIVE['ADMOB_ANDROID_APP_ID']},
                  {'ADMOB_INTERSTITIAL_AD_UNIT_ID': LIVE['ADMOB_INTERSTITIAL_AD_UNIT_ID']},
                  {**LIVE, 'ADMOB_ANDROID_APP_ID': ADS.TEST_APP_ID},
@@ -69,8 +71,76 @@ class AdsModeTests(unittest.TestCase):
                   'ADMOB_INTERSTITIAL_AD_UNIT_ID': 'ca-app-pub-0000000000000000/1234567890'}]
         for env in cases:
             with self.subTest(env=env):
-                with self.assertRaises(ADS.AdsConfigurationError):
+                with mock.patch.object(ADS, 'PUBLIC_CONFIG_PATH', ROOT / 'missing-public-config.json'), \
+                        self.assertRaises(ADS.AdsConfigurationError):
                     ADS.resolve_ads({**env, 'ADS_MODE': 'live'})
+
+    def test_live_uses_owner_public_ids_when_environment_ids_are_absent_or_blank(self):
+        for env in ({'ADS_MODE': 'live'}, {'ADS_MODE': 'live', 'ADMOB_ANDROID_APP_ID': '',
+                                          'ADMOB_INTERSTITIAL_AD_UNIT_ID': '  '}):
+            with self.subTest(env=env):
+                config = ADS.resolve_ads(env)
+                self.assertEqual(config.app_id, OWNER['ADMOB_ANDROID_APP_ID'])
+                self.assertEqual(config.interstitial_id, OWNER['ADMOB_INTERSTITIAL_AD_UNIT_ID'])
+                self.assertEqual(config.mode, 'live')
+                self.assertFalse(config.public_info()['IsTest'])
+
+    def test_two_explicit_ids_override_public_file_without_reading_it(self):
+        with mock.patch.object(ADS, '_public_ids', side_effect=AssertionError('Public file should not be read')):
+            config = ADS.resolve_ads(LIVE)
+        self.assertEqual(config.app_id, LIVE['ADMOB_ANDROID_APP_ID'])
+        self.assertEqual(config.interstitial_id, LIVE['ADMOB_INTERSTITIAL_AD_UNIT_ID'])
+
+    def test_partial_override_uses_public_fallback_only_when_publisher_still_matches(self):
+        custom_unit = 'ca-app-pub-1953724823797056/9123456780'
+        config = ADS.resolve_ads({'ADS_MODE': 'live', 'ADMOB_INTERSTITIAL_AD_UNIT_ID': custom_unit})
+        self.assertEqual(config.app_id, OWNER['ADMOB_ANDROID_APP_ID'])
+        self.assertEqual(config.interstitial_id, custom_unit)
+        with self.assertRaisesRegex(ADS.AdsConfigurationError, 'same publisher'):
+            ADS.resolve_ads({'ADS_MODE': 'live', 'ADMOB_INTERSTITIAL_AD_UNIT_ID': LIVE['ADMOB_INTERSTITIAL_AD_UNIT_ID']})
+
+    def test_public_config_does_not_select_live_mode_or_replace_nonproduction_ids(self):
+        with mock.patch.object(ADS, '_public_ids', side_effect=AssertionError('Nonproduction must ignore public owner IDs')):
+            for mode in (None, 'off', 'test'):
+                env = {**OWNER, **({'ADS_MODE': mode} if mode else {})}
+                with self.subTest(mode=mode):
+                    config = ADS.resolve_ads(env)
+                    self.assertEqual(config.mode, mode or 'off')
+                    self.assertEqual(config.app_id, ADS.TEST_APP_ID)
+                    self.assertEqual(config.interstitial_id, ADS.TEST_INTERSTITIAL_ID)
+
+    def test_malformed_ambiguous_or_nonowner_public_configuration_fails_live(self):
+        invalid = ['{', '[]', 'null', '{}',
+                   json.dumps({**OWNER, 'ADS_MODE': 'live'}),
+                   json.dumps({**OWNER, 'ADMOB_ANDROID_APP_ID': None}),
+                   json.dumps({**OWNER, 'ADMOB_INTERSTITIAL_AD_UNIT_ID': 123}),
+                   json.dumps({**OWNER, 'ADMOB_ANDROID_APP_ID': '<malformed&xml>'}),
+                   json.dumps({**OWNER, 'ADMOB_INTERSTITIAL_AD_UNIT_ID': LIVE['ADMOB_INTERSTITIAL_AD_UNIT_ID']}),
+                   json.dumps({'ADMOB_ANDROID_APP_ID': ADS.TEST_APP_ID,
+                               'ADMOB_INTERSTITIAL_AD_UNIT_ID': ADS.TEST_INTERSTITIAL_ID}),
+                   '{"ADMOB_ANDROID_APP_ID":"duplicate",' + json.dumps(OWNER)[1:],
+                   ' ' * 4097]
+        with tempfile.TemporaryDirectory() as name:
+            source = Path(name) / 'public-config.json'
+            for value in invalid:
+                source.write_text(value)
+                with self.subTest(value=value[:80]), mock.patch.object(ADS, 'PUBLIC_CONFIG_PATH', source), \
+                        self.assertRaises(ADS.AdsConfigurationError):
+                    ADS.resolve_ads({'ADS_MODE': 'live'})
+
+    def test_ci_exports_owner_live_ids_and_explicit_live_artifact_label_for_version_100(self):
+        with tempfile.TemporaryDirectory() as name:
+            target = Path(name) / 'github-env'
+            with mock.patch.dict(os.environ, {'ADS_MODE': 'live', 'GITHUB_ENV': str(target),
+                                              'SOUL_INTERNAL_VERSION_CODE': '100'}, clear=True):
+                with contextlib.redirect_stdout(io.StringIO()) as output:
+                    self.assertEqual(ADS.main(['--github-env', '--require-new-version']), 0)
+            exported = target.read_text()
+            self.assertIn('ADMOB_ANDROID_APP_ID=' + OWNER['ADMOB_ANDROID_APP_ID'], exported)
+            self.assertIn('ADMOB_INTERSTITIAL_AD_UNIT_ID=' + OWNER['ADMOB_INTERSTITIAL_AD_UNIT_ID'], exported)
+            self.assertIn('SOUL_ADS_ARTIFACT_LABEL=LIVE_ADS\n', exported)
+            self.assertEqual(json.loads(output.getvalue())['AdsMode'], 'live')
+            self.assertFalse(json.loads(output.getvalue())['IsTest'])
 
     def test_unknown_modes_fail_closed(self):
         for value in ('', 'LIVE', 'production', 'test\nlive', None):
@@ -103,6 +173,15 @@ class AdsModeTests(unittest.TestCase):
 
 
 class GeneratedManifestTests(unittest.TestCase):
+    def test_owner_public_fallback_generates_verifiable_live_version_100_metadata(self):
+        env = {'ADS_MODE': 'live', 'ADMOB_ANDROID_APP_ID': '', 'ADMOB_INTERSTITIAL_AD_UNIT_ID': ''}
+        xml = PLATFORMS.configure_android_manifest(MANIFEST.replace('versionCode="99"', 'versionCode="100"'), env)
+        info = VERIFY.validate_manifest(xml, 100, ADS.resolve_ads(env))
+        self.assertEqual(info['AdsMode'], 'live')
+        self.assertFalse(info['IsTest'])
+        self.assertEqual(info['AdMobAndroidAppId'], OWNER['ADMOB_ANDROID_APP_ID'])
+        self.assertEqual(info['AdMobInterstitialAdUnitId'], OWNER['ADMOB_INTERSTITIAL_AD_UNIT_ID'])
+
     def test_generated_ids_and_existing_escaped_xml_survive_without_duplicate_metadata(self):
         for mode in ('off', 'test', 'live'):
             env = {**LIVE, 'ADS_MODE': mode}

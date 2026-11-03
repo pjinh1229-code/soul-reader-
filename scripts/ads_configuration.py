@@ -20,6 +20,8 @@ DELAY_MEASUREMENT_METADATA = 'com.google.android.gms.ads.DELAY_APP_MEASUREMENT_I
 MODE_METADATA = 'com.soulreader.ads.MODE'
 UNIT_ID_METADATA = 'com.soulreader.ads.INTERSTITIAL_AD_UNIT_ID'
 MIN_ADS_VERSION_CODE = 99
+PUBLIC_CONFIG_PATH = Path(__file__).resolve().parents[1] / 'release/admob/public-config.json'
+PUBLIC_ID_NAMES = ('ADMOB_ANDROID_APP_ID', 'ADMOB_INTERSTITIAL_AD_UNIT_ID')
 
 
 class AdsConfigurationError(ValueError):
@@ -43,6 +45,40 @@ class AdsConfiguration:
         }
 
 
+def _validate_live_ids(app_id: str, unit_id: str) -> None:
+    app = re.fullmatch(r'ca-app-pub-([0-9]{16})~([0-9]{10})', app_id) if isinstance(app_id, str) else None
+    unit = re.fullmatch(r'ca-app-pub-([0-9]{16})/([0-9]{10})', unit_id) if isinstance(unit_id, str) else None
+    if not app or not unit:
+        raise AdsConfigurationError('Live ads require valid ADMOB_ANDROID_APP_ID and ADMOB_INTERSTITIAL_AD_UNIT_ID.')
+    if app[1] != unit[1]:
+        raise AdsConfigurationError('Live AdMob app and interstitial IDs must have the same publisher.')
+    if app[1] in (TEST_PUBLISHER, '0' * 16) or app[2] == '0' * 10 or unit[2] == '0' * 10:
+        raise AdsConfigurationError('Live ads require owner AdMob IDs; Google test or zero IDs are not permitted.')
+
+
+def _public_ids() -> dict[str, str]:
+    def unique_keys(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError('Duplicate public configuration key.')
+            value[key] = item
+        return value
+
+    try:
+        source = PUBLIC_CONFIG_PATH.read_text(encoding='utf-8')
+        if len(source) > 4096:
+            raise ValueError('Oversized public configuration.')
+        values = json.loads(source, object_pairs_hook=unique_keys)
+        if (not isinstance(values, dict) or set(values) != set(PUBLIC_ID_NAMES)
+                or any(not isinstance(value, str) for value in values.values())):
+            raise ValueError('Public configuration must contain only the two public AdMob identifiers.')
+    except (OSError, UnicodeError, ValueError):
+        raise AdsConfigurationError('Live ads require a valid public AdMob configuration or both explicit environment IDs.') from None
+    _validate_live_ids(values[PUBLIC_ID_NAMES[0]], values[PUBLIC_ID_NAMES[1]])
+    return values
+
+
 def resolve_ads(environ: Mapping[str, str]) -> AdsConfiguration:
     mode = environ.get('ADS_MODE', 'off')
     if mode not in ('off', 'test', 'live'):
@@ -51,16 +87,13 @@ def resolve_ads(environ: Mapping[str, str]) -> AdsConfiguration:
     # Never copy owner IDs into an off/test build or silently promote it to live.
     if mode != 'live':
         return AdsConfiguration(mode, TEST_APP_ID, TEST_INTERSTITIAL_ID)
-    app_id = environ.get('ADMOB_ANDROID_APP_ID', '')
-    unit_id = environ.get('ADMOB_INTERSTITIAL_AD_UNIT_ID', '')
-    app = re.fullmatch(r'ca-app-pub-([0-9]{16})~([0-9]{10})', app_id)
-    unit = re.fullmatch(r'ca-app-pub-([0-9]{16})/([0-9]{10})', unit_id)
-    if not app or not unit:
-        raise AdsConfigurationError('Live ads require valid ADMOB_ANDROID_APP_ID and ADMOB_INTERSTITIAL_AD_UNIT_ID.')
-    if app[1] != unit[1]:
-        raise AdsConfigurationError('Live AdMob app and interstitial IDs must have the same publisher.')
-    if app[1] in (TEST_PUBLISHER, '0' * 16) or app[2] == '0' * 10 or unit[2] == '0' * 10:
-        raise AdsConfigurationError('Live ads require owner AdMob IDs; Google test or zero IDs are not permitted.')
+    configured = {name: environ.get(name, '') for name in PUBLIC_ID_NAMES}
+    if any(isinstance(value, str) and not value.strip() for value in configured.values()):
+        public = _public_ids()
+        configured = {name: public[name] if isinstance(value, str) and not value.strip() else value
+                      for name, value in configured.items()}
+    app_id, unit_id = (configured[name] for name in PUBLIC_ID_NAMES)
+    _validate_live_ids(app_id, unit_id)
     return AdsConfiguration(mode, app_id, unit_id)
 
 
