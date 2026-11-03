@@ -224,7 +224,6 @@ class FreeReadingAdsController {
       }
 
       final ad = loaded;
-      if (ad == null) return FreeReadingAdResult.loadFailed;
       try {
         // No timeout here: releasing the reading early would put report/audio
         // behind a full-screen ad that the native SDK still owns.
