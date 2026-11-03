@@ -2,15 +2,19 @@
 // purchase records, query parameters, or billing runtime secrets.
 export const SUPPORT_EMAIL = 'jgw98541706@gmail.com';
 export const SERVICE_OPERATOR = 'SOUL READER 운영자';
-export const LEGAL_UPDATED = '2026-11-01';
+export const LEGAL_UPDATED = '2026-11-03';
 
 const escape = value => String(value).replace(/[&<>"']/g,
   character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 const mail = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('[SOUL READER] 계정 및 데이터 삭제 요청')}&body=${encodeURIComponent('SOUL READER 계정 및 연결된 데이터 삭제를 요청합니다.\n\n앱 로그인에 사용한 Google 이메일: \n삭제 범위: 계정 및 연결된 데이터 전체\n\n이 이메일을 앱 로그인에 사용한 주소에서 보내주세요. 비밀번호, 인증 코드, 구매 토큰, 서비스 계정 키, 신분증 또는 사진을 첨부하지 마세요.')}`;
 const stylesheet = `:root{color-scheme:light dark;font-family:system-ui,-apple-system,sans-serif;line-height:1.8}body{margin:0;background:#17121f;color:#f5edf6}main{max-width:760px;padding:28px 22px 64px;margin:auto}h1{font-size:1.7rem;line-height:1.45}h2{font-size:1.15rem;margin-top:32px}a{color:#f1c9e1;overflow-wrap:anywhere}li{margin:.5em 0}nav{display:flex;gap:20px;flex-wrap:wrap}.note{padding:16px;border:1px solid #70546b;border-radius:12px}.button{display:inline-block;padding:12px 18px;border-radius:10px;background:#f1c9e1;color:#241428;text-decoration:none;font-weight:bold}small{color:#d2bed4}strong{color:#ffe1ed}footer{margin-top:36px;border-top:1px solid #70546b;padding-top:20px}`;
 function page(title, content) {
-  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>${escape(title)} · SOUL READER</title><style>${stylesheet}</style></head><body><main><nav aria-label="서비스 안내"><a href="/privacy">개인정보처리방침</a><a href="/delete-account">계정 및 데이터 삭제 요청</a></nav><h1>${escape(title)}</h1><p><strong>SOUL READER</strong> · Android 패키지 <span>com.soulreader.soul_reader</span><br><small>최종 수정: ${LEGAL_UPDATED}</small></p>${content}<footer>운영자: ${escape(SERVICE_OPERATOR)}<br>개인정보 및 계정 문의: <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></footer></main></body></html>`;
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>${escape(title)} · SOUL READER</title><style>${stylesheet}</style></head><body><main><nav aria-label="서비스 안내"><a href="/">서비스 안내</a><a href="/privacy">개인정보처리방침</a><a href="/delete-account">계정 및 데이터 삭제 요청</a></nav><h1>${escape(title)}</h1><p><strong>SOUL READER</strong> · Android 패키지 <span>com.soulreader.soul_reader</span><br><small>최종 수정: ${LEGAL_UPDATED}</small></p>${content}<footer>운영자: ${escape(SERVICE_OPERATOR)}<br>개인정보 및 계정 문의: <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a></footer></main></body></html>`;
 }
+
+export const SERVICE_PAGE = page('서비스 안내', `
+<p>SOUL READER는 사진 속 얼굴의 비율을 소재로 이야기를 즐기는 Android 오락 앱입니다. 사진 기반 풀이는 의료·금융 조언이나 신원 확인을 위한 기능이 아닙니다.</p>
+<p>앱의 개인정보 처리와 계정 삭제 방법은 위 안내 페이지에서 확인할 수 있습니다. 앱 이용과 개인정보에 관한 문의는 아래 지원 이메일로 보내주세요.</p>`);
 
 export const PRIVACY_PAGE = page('개인정보처리방침', `
 <p>이 방침은 SOUL READER 앱의 사진 기반 오락용 풀이, Google 로그인, Google Play 인앱 구매 및 구매 내역 복원에 적용됩니다.</p>
@@ -24,7 +28,10 @@ export const PRIVACY_PAGE = page('개인정보처리방침', `
 <p>구매 확인·복원·환불 반영·부정 사용 방지를 위해 계정 식별자, 상품 및 구매 식별 정보, 암호화한 구매 토큰, 사진별 풀이를 구분하는 임의 식별자, 선택한 주제, 구매 상태와 처리 시각을 Cloudflare 서버와 데이터베이스에서 처리합니다. 이 서버에는 사진 자체나 얼굴 좌표를 저장하지 않습니다.</p>
 <p>결제는 Google Play에서 처리합니다. 카드 번호나 결제 수단 비밀번호는 이 앱의 구매 확인 서버에 전달되지 않습니다. Google Play 및 결제 제공자의 거래 기록은 각 제공자의 정책에 따라 별도로 관리됩니다.</p>
 <h2>4. 서비스 제공자와 SDK</h2>
-<p>Google Firebase Authentication은 로그인, Google Play는 결제, Google ML Kit는 기기 내 얼굴 감지, Cloudflare Workers/D1은 구매 확인과 기록 보관에 사용됩니다. Google SDK는 해당 SDK의 정책에 따라 서비스 제공·안정성·진단에 필요한 앱·기기 관련 정보를 처리할 수 있습니다. 앱에는 광고 SDK나 직접 추가한 이용 분석·Crashlytics SDK가 없습니다.</p>
+<p>Google Firebase Authentication은 로그인, Google Play는 결제, Google ML Kit는 기기 내 얼굴 감지, Cloudflare Workers/D1은 구매 확인과 기록 보관에 사용됩니다. Google SDK는 해당 SDK의 정책에 따라 서비스 제공·안정성·진단에 필요한 앱·기기 관련 정보를 처리할 수 있습니다. 광고 기능이 없는 기존 버전에는 광고 SDK가 없으며, 직접 추가한 이용 분석·Crashlytics SDK는 없습니다.</p>
+<p><strong>광고 기능이 포함된 버전에서는</strong> Google AdMob(Google Mobile Ads SDK)으로 새 무료 풀이를 열기 전 전면 광고를 표시할 수 있습니다. 저장된 풀이 다시 열기, 유료 풀이 및 검토용 접근에는 이 광고를 요청하지 않습니다. 사진, 얼굴 특징, 풀이 내용·식별자, Google 로그인 계정의 이름·이메일·UID 또는 구매 토큰을 광고 SDK의 요청 정보로 전달하지 않습니다.</p>
+<p>광고 SDK는 광고 제공·측정·분석·부정 사용 방지를 위해 IP 주소와 그로부터 추정한 대략적 위치, 광고 조회·탭 등 앱 상호작용, 앱·기기 식별자 및 앱 성능·오류 관련 진단 정보를 처리하거나 Google에 전달할 수 있습니다. 앱이 사진을 기기에서 처리하거나 비개인 맞춤 광고·테스트 광고를 요청한다는 이유로 광고 SDK의 데이터 처리가 없어지는 것은 아닙니다.</p>
+<p>광고 기능이 포함된 버전에서는 Google의 사용자 메시지 플랫폼(UMP)으로 지역·설정에 따른 동의 또는 개인정보 선택 화면을 제공하고, 광고 요청이 허용된 경우에만 비개인 맞춤 광고를 요청합니다. 변경이 필요한 지역·설정에서는 앱의 광고 개인정보 선택 메뉴에서 다시 선택할 수 있습니다. 동의 화면이나 광고를 불러오지 못하면 무료 풀이를 계속 이용할 수 있습니다. Google의 광고 데이터 보관·관리와 권리 행사 방법은 <a href="https://policies.google.com/technologies/ads" rel="noreferrer">Google 광고 개인정보 보호 안내</a> 및 <a href="https://policies.google.com/privacy" rel="noreferrer">Google 개인정보처리방침</a>을 확인하세요. 앱 계정 삭제는 Google이 별도로 처리하는 광고 정보를 자동 삭제하지 않습니다.</p>
 <p>Google과 Cloudflare의 서비스는 국외 인프라를 사용할 수 있습니다. 제공자의 처리 기준은 <a href="https://policies.google.com/privacy" rel="noreferrer">Google 개인정보처리방침</a>, <a href="https://firebase.google.com/support/privacy" rel="noreferrer">Firebase 개인정보 보호 안내</a>, <a href="https://developers.google.com/ml-kit/android-data-disclosure" rel="noreferrer">ML Kit 데이터 공개 안내</a>, <a href="https://www.cloudflare.com/privacypolicy/" rel="noreferrer">Cloudflare 개인정보처리방침</a>에서 확인할 수 있습니다.</p>
 <p>검토용 계정은 새 Google 계정이나 결제 없이 동일한 풀이 콘텐츠를 확인하는 데 사용합니다. 검토용 접근 코드는 서버에서 확인하며 앱에 영구 저장하거나 웹 화면에 전달하지 않습니다. 반복된 로그인 시도를 제한하기 위해 보안 키로 해시한 IP 식별 정보와 분 단위 요청 횟수를 일시적으로 보관합니다. 이 기록에는 원본 IP, 접근 코드, 이름 또는 사진을 넣지 않습니다. 오래된 요청 횟수 기록은 후속 요청 처리 및 정기 정리 시 삭제하며, 해시 기록을 완전한 익명 정보라고 보장하지 않습니다.</p>
 <h2>5. 보관과 삭제</h2>
@@ -55,13 +62,27 @@ export const DELETE_ACCOUNT_PAGE = page('계정 및 데이터 삭제 요청', `
 <h2>5. 기기에만 저장된 기록</h2>
 <p>서버에서 휴대폰의 사진·풀이 기록을 원격으로 지울 수 없습니다. 각 Android 기기에서 <strong>설정 → 애플리케이션 → SOUL READER → 저장공간 → 데이터 삭제</strong>를 진행하면 로컬 앱 데이터를 지울 수 있습니다. 기기 내 풀이 기록을 지우면 원래 내용이 복구되지 않을 수 있습니다. 원래 갤러리 사진은 갤러리에서 직접 삭제해야 합니다.</p>`);
 
-export function legalPageResponse(request) {
+export function legalPageResponse(request, env = {}) {
   const url = new URL(request.url);
-  const content = url.pathname === '/privacy' ? PRIVACY_PAGE
+  const appAds = url.pathname === '/app-ads.txt';
+  const content = url.pathname === '/' ? SERVICE_PAGE : url.pathname === '/privacy' ? PRIVACY_PAGE
     : url.pathname === '/delete-account' ? DELETE_ACCOUNT_PAGE : null;
-  if (content === null) return null;
+  if (content === null && !appAds) return null;
   if (!['GET', 'HEAD'].includes(request.method)) {
     return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD', 'Cache-Control': 'no-store' } });
+  }
+  if (appAds) {
+    // Only the owner's public publisher ID belongs here. The Google sample
+    // publisher used by test builds must never authorize a seller for this app.
+    const publisher = env?.ADMOB_PUBLISHER_ID;
+    const valid = typeof publisher === 'string' && /^pub-[0-9]{16}$/.test(publisher)
+      && !['pub-3940256099942544', 'pub-0000000000000000'].includes(publisher);
+    return new Response(request.method === 'HEAD' ? null : valid
+      ? `google.com, ${publisher}, DIRECT, f08c47fec0942fa0\n` : 'Not found\n', {
+      status: valid ? 200 : 404,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff' },
+    });
   }
   return new Response(request.method === 'HEAD' ? null : content, { headers: {
     'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
