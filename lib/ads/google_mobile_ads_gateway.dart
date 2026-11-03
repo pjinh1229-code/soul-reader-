@@ -31,13 +31,37 @@ class GoogleMobileAdsGateway implements FreeReadingAdsGateway {
   }
 
   @override
-  Future<void> showConsentFormIfRequired() async {
+  Future<FreeReadingConsentForm?> loadConsentFormIfRequired() async {
     if (!isSupported) throw StateError('unsupported_ads_platform');
-    FormError? failure;
-    await ConsentForm.loadAndShowConsentFormIfRequired((error) {
-      failure = error;
-    });
-    if (failure != null) throw StateError('consent_form_failed');
+    final information = ConsentInformation.instance;
+    if (await information.getConsentStatus() != ConsentStatus.required) {
+      return null;
+    }
+    if (!await information.isConsentFormAvailable()) {
+      throw StateError('consent_form_unavailable');
+    }
+    final completed = Completer<FreeReadingConsentForm>();
+    try {
+      ConsentForm.loadConsentForm(
+        (form) {
+          if (completed.isCompleted) {
+            unawaited(form.dispose().catchError((Object _) {}));
+          } else {
+            completed.complete(_GoogleConsentForm(form));
+          }
+        },
+        (_) {
+          if (!completed.isCompleted) {
+            completed.completeError(StateError('consent_form_load_failed'));
+          }
+        },
+      );
+    } catch (_) {
+      if (!completed.isCompleted) {
+        completed.completeError(StateError('consent_form_load_failed'));
+      }
+    }
+    return completed.future;
   }
 
   @override
@@ -107,6 +131,49 @@ class GoogleMobileAdsGateway implements FreeReadingAdsGateway {
       }
     }
     return completed.future;
+  }
+}
+
+class _GoogleConsentForm implements FreeReadingConsentForm {
+  _GoogleConsentForm(this._form);
+
+  final ConsentForm _form;
+  Completer<void>? _completion;
+  bool _disposed = false;
+
+  @override
+  Future<void> show() {
+    if (_completion != null) return _completion!.future;
+    if (_disposed) return Future.error(StateError('consent_form_disposed'));
+    final completion = Completer<void>();
+    _completion = completion;
+    void finish(FormError? error) {
+      if (!completion.isCompleted) {
+        if (error == null) {
+          completion.complete();
+        } else {
+          completion.completeError(StateError('consent_form_show_failed'));
+        }
+      }
+      dispose();
+    }
+
+    try {
+      _form.show(finish);
+    } catch (_) {
+      if (!completion.isCompleted) {
+        completion.completeError(StateError('consent_form_show_failed'));
+      }
+      dispose();
+    }
+    return completion.future;
+  }
+
+  @override
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    unawaited(_form.dispose().catchError((Object _) {}));
   }
 }
 

@@ -82,11 +82,17 @@ abstract interface class FreeReadingInterstitial {
   void dispose();
 }
 
+abstract interface class FreeReadingConsentForm {
+  /// Completes only after dismissal or an SDK presentation failure.
+  Future<void> show();
+  void dispose();
+}
+
 /// Keeps platform SDK callbacks out of reading and WebView state management.
 abstract interface class FreeReadingAdsGateway {
   bool get isSupported;
   Future<void> updateConsent();
-  Future<void> showConsentFormIfRequired();
+  Future<FreeReadingConsentForm?> loadConsentFormIfRequired();
   Future<FreeReadingAdsConsent> getConsentState();
   Future<void> showPrivacyOptions();
   Future<void> initialize();
@@ -115,6 +121,7 @@ class FreeReadingAdsController {
   Future<void>? _operationDone;
   Future<void>? _privacyOperation;
   _InterstitialHandle? _activeAd;
+  _ConsentFormHandle? _activeConsentForm;
 
   /// Configuration/platform availability, not an ad or consent guarantee.
   bool get available =>
@@ -180,7 +187,11 @@ class FreeReadingAdsController {
   Future<FreeReadingAdResult> _performReading() async {
     if (!_canContinue) return FreeReadingAdResult.unavailable;
     try {
-      if (!await _prepareConsent()) return FreeReadingAdResult.consentDenied;
+      if (!await _prepareConsent()) {
+        return _disposed
+            ? FreeReadingAdResult.disposed
+            : FreeReadingAdResult.consentDenied;
+      }
     } catch (_) {
       return _disposed
           ? FreeReadingAdResult.disposed
@@ -259,13 +270,45 @@ class FreeReadingAdsController {
     if (!_consentPrepared) {
       await gateway.updateConsent().timeout(config.loadTimeout);
       if (!_canContinue) return false;
-      // Unlike the network-only update, the UMP form has no timeout.
-      await gateway.showConsentFormIfRequired();
+      final form = await _loadConsentForm();
+      if (form != null) {
+        final handle = _ConsentFormHandle(form);
+        _activeConsentForm = handle;
+        try {
+          if (!_canContinue) return false;
+          // Loading is bounded; a visible UMP form deliberately has no timer.
+          handle.showing = true;
+          await form.show();
+        } finally {
+          handle.dispose();
+          if (identical(_activeConsentForm, handle)) {
+            _activeConsentForm = null;
+          }
+        }
+      }
       _consentPrepared = true;
     }
     if (_disposed) return false;
     await _refreshConsent();
     return _consent?.canRequestAds ?? false;
+  }
+
+  Future<FreeReadingConsentForm?> _loadConsentForm() {
+    var timedOut = false;
+    final request = gateway.loadConsentFormIfRequired();
+    unawaited(request.then<void>((form) {
+      if (timedOut && form != null) {
+        try {
+          form.dispose();
+        } catch (_) {
+          // A late form must never appear after the reading continued.
+        }
+      }
+    }, onError: (Object _, StackTrace __) {}));
+    return request.timeout(config.loadTimeout, onTimeout: () {
+      timedOut = true;
+      throw TimeoutException('Consent form load timed out');
+    });
   }
 
   Future<void> _refreshConsent() async {
@@ -297,7 +340,10 @@ class FreeReadingAdsController {
       await _refreshConsent();
     } catch (_) {
       // A privacy SDK/network error must not make the reading unavailable.
-      _consent = null;
+      _consent = FreeReadingAdsConsent(
+        canRequestAds: false,
+        privacyOptionsRequired: _consent?.privacyOptionsRequired ?? false,
+      );
       if (!_disposed) onChanged?.call();
     } finally {
       _operationDone = null;
@@ -310,6 +356,8 @@ class FreeReadingAdsController {
     _foreground = false;
     final ad = _activeAd;
     if (ad != null && !ad.showing) ad.dispose();
+    final form = _activeConsentForm;
+    if (form != null && !form.showing) form.dispose();
     // A visible native surface still completes through its SDK callback.
   }
 }
@@ -325,6 +373,23 @@ class _InterstitialHandle {
     _disposed = true;
     try {
       ad.dispose();
+    } catch (_) {
+      // Cleanup never blocks the free report.
+    }
+  }
+}
+
+class _ConsentFormHandle {
+  _ConsentFormHandle(this.form);
+  final FreeReadingConsentForm form;
+  bool showing = false;
+  bool _disposed = false;
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    try {
+      form.dispose();
     } catch (_) {
       // Cleanup never blocks the free report.
     }

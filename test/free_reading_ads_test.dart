@@ -20,6 +20,24 @@ class FakeInterstitial implements FreeReadingInterstitial {
   void dispose() => disposals++;
 }
 
+class FakeConsentForm implements FreeReadingConsentForm {
+  FakeConsentForm({Future<void>? dismissal})
+      : dismissal = dismissal ?? Future<void>.value();
+
+  final Future<void> dismissal;
+  int shows = 0;
+  int disposals = 0;
+
+  @override
+  Future<void> show() {
+    shows++;
+    return dismissal;
+  }
+
+  @override
+  void dispose() => disposals++;
+}
+
 class FakeAdsGateway implements FreeReadingAdsGateway {
   bool supported = true;
   bool allowed = true;
@@ -27,8 +45,9 @@ class FakeAdsGateway implements FreeReadingAdsGateway {
   bool updateFails = false;
   bool initializeFails = false;
   bool loadFails = false;
+  bool privacyFails = false;
   int updates = 0;
-  int consentForms = 0;
+  int consentLoads = 0;
   int consentReads = 0;
   int initializations = 0;
   int loads = 0;
@@ -38,8 +57,13 @@ class FakeAdsGateway implements FreeReadingAdsGateway {
   Completer<void>? updateWait;
   Completer<void>? consentFormWait;
   Completer<void>? privacyWait;
+  Completer<FreeReadingConsentForm?>? consentLoadWait;
   Completer<FreeReadingInterstitial>? loadWait;
   final loadedAds = <FakeInterstitial>[];
+  final loadedConsentForms = <FakeConsentForm>[];
+
+  int get consentForms =>
+      loadedConsentForms.fold(0, (total, form) => total + form.shows);
 
   @override
   bool get isSupported => supported;
@@ -52,9 +76,12 @@ class FakeAdsGateway implements FreeReadingAdsGateway {
   }
 
   @override
-  Future<void> showConsentFormIfRequired() async {
-    consentForms++;
-    await consentFormWait?.future;
+  Future<FreeReadingConsentForm?> loadConsentFormIfRequired() async {
+    consentLoads++;
+    if (consentLoadWait != null) return consentLoadWait!.future;
+    final form = FakeConsentForm(dismissal: consentFormWait?.future);
+    loadedConsentForms.add(form);
+    return form;
   }
 
   @override
@@ -70,6 +97,7 @@ class FakeAdsGateway implements FreeReadingAdsGateway {
   @override
   Future<void> showPrivacyOptions() async {
     privacyForms++;
+    if (privacyFails) throw StateError('privacy form network failure');
     await privacyWait?.future;
   }
 
@@ -341,6 +369,86 @@ void main() {
     expect(gateway.loads, 0);
   });
 
+  test('canceled route during consent loading disposes without showing', () async {
+    gateway.consentLoadWait = Completer<FreeReadingConsentForm?>();
+    final attempt = controller.showForReading('reading-a');
+    await settle();
+    expect(gateway.consentLoads, 1);
+    contextCurrent = false;
+    final form = FakeConsentForm();
+    gateway.consentLoadWait!.complete(form);
+    expect(await attempt, FreeReadingAdResult.consentDenied);
+    expect(form.shows, 0);
+    expect(form.disposals, 1);
+    expect(gateway.initializations, 0);
+    expect(gateway.loads, 0);
+  });
+
+  test('dispose during consent loading disposes without showing', () async {
+    gateway.consentLoadWait = Completer<FreeReadingConsentForm?>();
+    final attempt = controller.showForReading('reading-a');
+    await settle();
+    controller.dispose();
+    final form = FakeConsentForm();
+    gateway.consentLoadWait!.complete(form);
+    expect(await attempt, FreeReadingAdResult.disposed);
+    expect(form.shows, 0);
+    expect(form.disposals, 1);
+    expect(gateway.loads, 0);
+  });
+
+  testWidgets('consent load timeout disposes a late form without showing', (tester) async {
+    controller = create(config: const FreeReadingAdsConfig(
+      mode: FreeReadingAdsMode.test,
+      loadTimeout: Duration(seconds: 1),
+    ));
+    gateway.consentLoadWait = Completer<FreeReadingConsentForm?>();
+    final attempt = controller.showForReading('reading-a');
+    await tester.pump();
+    expect(gateway.consentLoads, 1);
+    await tester.pump(const Duration(seconds: 2));
+    expect(await attempt, FreeReadingAdResult.consentDenied);
+    final form = FakeConsentForm();
+    gateway.consentLoadWait!.complete(form);
+    await tester.pump();
+    expect(form.shows, 0);
+    expect(form.disposals, 1);
+    expect(gateway.loads, 0);
+    expect(await controller.showForReading('reading-a'),
+        FreeReadingAdResult.consentDenied);
+    expect(gateway.consentLoads, 1);
+  });
+
+  test('consent form not required continues without a form', () async {
+    gateway.consentLoadWait = Completer<FreeReadingConsentForm?>()
+      ..complete(null);
+    final attempt = controller.showForReading('reading-a');
+    await settle();
+    expect(gateway.consentForms, 0);
+    expect(gateway.loadedAds.single.shows, 1);
+    gateway.loadedAds.single.dismiss();
+    expect(await attempt, FreeReadingAdResult.dismissed);
+  });
+
+  testWidgets('disposing a visible consent form waits for dismissal', (tester) async {
+    gateway.consentFormWait = Completer<void>();
+    final attempt = controller.showForReading('reading-a');
+    var completed = false;
+    unawaited(attempt.then((_) => completed = true));
+    await tester.pump();
+    final form = gateway.loadedConsentForms.single;
+    expect(form.shows, 1);
+    controller.dispose();
+    await tester.pump(const Duration(minutes: 5));
+    expect(completed, isFalse);
+    expect(form.disposals, 0);
+    gateway.consentFormWait!.complete();
+    await tester.pump();
+    expect(await attempt, FreeReadingAdResult.disposed);
+    expect(form.disposals, 1);
+    expect(gateway.loads, 0);
+  });
+
   test('dispose while loading disposes eventual ad without showing', () async {
     gateway.loadWait = Completer<FreeReadingInterstitial>();
     final attempt = controller.showForReading('reading-a');
@@ -403,6 +511,27 @@ void main() {
     expect(await waitingReading, FreeReadingAdResult.skipped);
     expect(controller.privacyOptionsRequired, isFalse);
     expect(await controller.showForReading('reading-c'),
+        FreeReadingAdResult.consentDenied);
+    expect(gateway.loads, 1);
+  });
+
+  test('required privacy options stay available after failure for retry', () async {
+    gateway.privacyRequired = true;
+    gateway.loadFails = true;
+    expect(await controller.showForReading('reading-a'),
+        FreeReadingAdResult.loadFailed);
+    expect(controller.privacyOptionsRequired, isTrue);
+    gateway.privacyFails = true;
+    await controller.showPrivacyOptions();
+    expect(gateway.privacyForms, 1);
+    expect(controller.privacyOptionsRequired, isTrue);
+    gateway.privacyFails = false;
+    gateway.privacyRequired = false;
+    gateway.allowed = false;
+    await controller.showPrivacyOptions();
+    expect(gateway.privacyForms, 2);
+    expect(controller.privacyOptionsRequired, isFalse);
+    expect(await controller.showForReading('reading-b'),
         FreeReadingAdResult.consentDenied);
     expect(gateway.loads, 1);
   });
