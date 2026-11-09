@@ -1,0 +1,209 @@
+name: Build SOUL READER AD_ID fix 101
+'on':
+  push:
+    branches:
+    - feat/free-reading-ads-v100
+    paths:
+    - .github/workflows/build-ad-id-101.yml
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: soul-reader-ad-id-101
+  cancel-in-progress: false
+jobs:
+  billing-server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: 01afce97094a28ddcf90600cc30a03d4917b2293
+        persist-credentials: false
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+        cache: npm
+        cache-dependency-path: server/package-lock.json
+    - run: npm ci --ignore-scripts --no-fund
+    - name: Verify billing backend
+      run: npm test
+    - name: Bundle Worker without deployment
+      env:
+        WRANGLER_SEND_METRICS: 'false'
+      run: npx wrangler deploy --dry-run --config wrangler.example.jsonc --outdir "$RUNNER_TEMP/soul-billing-worker"
+  android-internal-aab:
+    needs: billing-server
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      SOUL_INTERNAL_VERSION_CODE: '101'
+      ADS_MODE: live
+      ADMOB_ANDROID_APP_ID: ''
+      ADMOB_INTERSTITIAL_AD_UNIT_ID: ''
+    steps:
+    - name: Checkout project
+      uses: actions/checkout@v4
+      with:
+        ref: 01afce97094a28ddcf90600cc30a03d4917b2293
+        persist-credentials: false
+    - name: Apply and verify the exact AD_ID source fix
+      shell: bash
+      run: "set -euo pipefail\npython3 - <<'PY'\nimport base64\nimport gzip\nimport hashlib\nimport json\n\
+        from pathlib import Path\nimport subprocess\n\nencoded = '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'\n\
+        expected_digest = '8b7af81086945d445fe2460edf86a252218402370efc9cb60d5c907a98677a4f'\nexpected_files\
+        \ = {'.github/workflows/build-android.yml': 'a1269a76acb724473d0716082b00039f96dd686933a07cda7c3f76944f407cc3',\
+        \ 'pubspec.yaml': '947c7e5dd196d51feb803398eccb37754ca4a5fc4b5718f9e2afd4432a7c97a9', 'scripts/configure_platforms.py':\
+        \ 'e96c18492521faff7a68b58dd41600c37cd0ba54ee54abd91e648940c533371c', 'scripts/verify_first_play_bundle.py':\
+        \ '495ccb840dc42054eea12efdec398ec2e0c802095df4a80d2c08e619bb442354', 'tests/test_ads_configuration.py':\
+        \ '3846346dd9acb4d4b7f4a014020d0c6cd51e6438090ed10de60a042594a608df', 'tests/test_first_play_bundle.py':\
+        \ '6c25fe42e37d3587d92798b87d2ffee75d8ab2780503f9c0c7fcb05fec15ba10'}\npatch = gzip.decompress(base64.b64decode(encoded,\
+        \ validate=True))\nif hashlib.sha256(patch).hexdigest() != expected_digest:\n    raise SystemExit('AD_ID\
+        \ source patch checksum mismatch.')\nfor check_only in (True, False):\n    command = ['git', 'apply',\
+        \ '--check'] if check_only else ['git', 'apply']\n    subprocess.run(command + ['-'], input=patch,\
+        \ check=True)\nfor name, expected in expected_files.items():\n    if hashlib.sha256(Path(name).read_bytes()).hexdigest()\
+        \ != expected:\n        raise SystemExit('AD_ID source file checksum mismatch: ' + name)\nprovenance\
+        \ = {\n    'sourceBaseCommit': '01afce97094a28ddcf90600cc30a03d4917b2293',\n    'sourcePatchSha256':\
+        \ expected_digest,\n    'sourceFixReferenceCommit': '3833b939f8d679579b21fc282b70a5127fe46394',\n\
+        \    'patchedSourceFilesSha256': expected_files,\n}\nPath('.ad-id-101-source.json').write_text(json.dumps(provenance,\
+        \ indent=2) + '\\n')\nprint('Verified AD_ID source patch applied; final AAB still requires verification.')\n\
+        PY\n"
+    - name: Validate version and ads configuration before restoring the original key
+      run: python3 scripts/ads_configuration.py --github-env --require-new-version
+    - name: Java 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '17'
+    - name: Restore and verify the original owner upload key privately
+      env:
+        SOUL_UPLOAD_KEYSTORE_BASE64: ${{ secrets.SOUL_UPLOAD_KEYSTORE_BASE64 }}
+        SOUL_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.SOUL_UPLOAD_KEYSTORE_PASSWORD }}
+        SOUL_UPLOAD_KEY_ALIAS: ${{ secrets.SOUL_UPLOAD_KEY_ALIAS }}
+        SOUL_UPLOAD_KEY_PASSWORD: ${{ secrets.SOUL_UPLOAD_KEY_PASSWORD }}
+        SOUL_UPLOAD_RECOVERY_ARCHIVE_BASE64: ${{ secrets.SOUL_UPLOAD_RECOVERY_ARCHIVE_BASE64 }}
+        SOUL_UPLOAD_RECOVERY_PASSWORD: ${{ secrets.SOUL_UPLOAD_RECOVERY_PASSWORD }}
+      run: python3 scripts/restore_upload_signing.py
+    - uses: actions/setup-node@v4
+      with:
+        node-version-file: .node-version
+    - name: Require the deployed billing configuration and authentication boundary
+      run: node server/scripts/check-deployed-worker.mjs
+    - name: Test release configuration and archive verification
+      run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+    - name: Test purchase, photo and legal links in Chromium
+      shell: bash
+      run: 'set -euo pipefail
+
+        npm install --ignore-scripts --prefix "$RUNNER_TEMP/legal-browser-test" playwright@1.57.0
+
+        export NODE_PATH="$RUNNER_TEMP/legal-browser-test/node_modules"
+
+        export CHROMIUM_PATH="$(command -v google-chrome || command -v chromium)"
+
+        test -n "$CHROMIUM_PATH"
+
+        node tests/billing_ui.cjs
+
+        node tests/free_reading_ads.cjs
+
+        node tests/photo_bridge.cjs
+
+        node tests/locales854.cjs
+
+        node tests/legal_links.cjs
+
+        node tests/review_access_ui.cjs
+
+        node tests/review_setup_ui.cjs
+
+        '
+    - name: Setup Flutter stable
+      uses: subosito/flutter-action@v2
+      with:
+        channel: stable
+        cache: true
+    - name: Generate Android and configure explicit upload signing
+      run: 'set -euo pipefail
+
+        java -m jdk.jartool/sun.security.tools.jarsigner.Main -help > /dev/null
+
+        bash scripts/prepare_android.sh
+
+        python3 scripts/restore_upload_signing.py --configure
+
+        python3 scripts/verify_assets.py
+
+        '
+    - name: Analyze and test native app
+      run: "set -euo pipefail\nfor check in analyze test; do\n  set +e\n  if [ \"$check\" = analyze ];\
+        \ then\n    flutter analyze --no-fatal-infos > \"$RUNNER_TEMP/native-$check.log\" 2>&1\n  else\n\
+        \    flutter test > \"$RUNNER_TEMP/native-$check.log\" 2>&1\n  fi\n  check_status=$?\n  set -e\n\
+        \  cat \"$RUNNER_TEMP/native-$check.log\"\n  if [ \"$check_status\" -ne 0 ]; then\n    tail -n\
+        \ 120 \"$RUNNER_TEMP/native-$check.log\" >> \"$GITHUB_STEP_SUMMARY\"\n    python3 - \"$RUNNER_TEMP/native-$check.log\"\
+        \ <<'PYANN'\nimport re\nimport sys\nfrom pathlib import Path\nlog = Path(sys.argv[1]).read_text(errors='replace')\n\
+        log = re.sub(r'\\x1b\\[[0-9;]*m', '', log)\nlines = [line.strip() for line in re.split(r'[\\r\\\
+        n]+', log) if line.strip()]\nfor line in lines[-30:]:\n    message = line.replace('%', '%25').replace('\\\
+        r', '%0D').replace('\\n', '%0A')\n    print('::error::' + message)\nPYANN\n    exit \"$check_status\"\
+        \n  fi\ndone\n"
+    - name: Build explicitly configured internal ads AAB with existing billing
+      run: "set -euo pipefail\nflutter build appbundle --release --build-number=\"$SOUL_INTERNAL_VERSION_CODE\"\
+        \ \\\n  --dart-define=BILLING_PACKAGE_NAME=com.soulreader.soul_reader \\\n  --dart-define=BILLING_VERIFIER_URL=https://soul-reader-billing.jgw98541706.workers.dev\
+        \ \\\n  --dart-define=ADS_MODE=\"$ADS_MODE\" \\\n  --dart-define=ADMOB_ANDROID_APP_ID=\"$ADMOB_ANDROID_APP_ID\"\
+        \ \\\n  --dart-define=ADMOB_INTERSTITIAL_AD_UNIT_ID=\"$ADMOB_INTERSTITIAL_AD_UNIT_ID\"\n"
+    - name: Download and verify official bundletool
+      run: "set -euo pipefail\ncurl --fail --location --retry 2 \\\n  https://github.com/google/bundletool/releases/download/1.18.2/bundletool-all-1.18.2.jar\
+        \ \\\n  --output \"$RUNNER_TEMP/bundletool-all-1.18.2.jar\"\nprintf '%s  %s\\n' '378b5434cd1378bef6b2bc527b8c7f0ff2584b273830335bce54d6d0813c8584'\
+        \ \\\n  \"$RUNNER_TEMP/bundletool-all-1.18.2.jar\" | sha256sum --check -\n"
+    - name: Verify signed bundle and original audio
+      run: "set -euo pipefail\npython3 scripts/verify_first_play_bundle.py \\\n  --bundle build/app/outputs/bundle/release/app-release.aab\
+        \ \\\n  --bundletool \"$RUNNER_TEMP/bundletool-all-1.18.2.jar\" \\\n  --certificate \"$RUNNER_TEMP/soul-owner-upload-certificate.pem\"\
+        \ \\\n  --version-code \"$SOUL_INTERNAL_VERSION_CODE\" \\\n  --ads-mode \"$ADS_MODE\" \\\n  --certificate-sha256\
+        \ c4d31b29444fcd6fabea9ee91a01fd6bab3383a07079302e19ff32a1d7805139 \\\n  --output SOUL_READER_8.5.6_INTERNAL_${SOUL_ADS_ARTIFACT_LABEL}_BUILD_INFO.json\n"
+    - name: Record patched-source provenance and verified AD_ID permission
+      shell: bash
+      run: "set -euo pipefail\npython3 - <<'PY'\nimport json\nimport os\nfrom pathlib import Path\nreport\
+        \ = Path('SOUL_READER_8.5.6_INTERNAL_LIVE_ADS_BUILD_INFO.json')\ninfo = json.loads(report.read_text())\n\
+        if info.get('advertisingIdPermission') != 'com.google.android.gms.permission.AD_ID':\n    raise\
+        \ SystemExit('Missing final AAB advertising ID permission verification.')\ninfo.pop('sourceCommit',\
+        \ None)\ninfo.update(json.loads(Path('.ad-id-101-source.json').read_text()))\ninfo['workflowCommit']\
+        \ = os.environ['GITHUB_SHA']\ninfo['sourcePreparation'] = 'pinned base plus checksum-verified\
+        \ AD_ID patch'\nreport.write_text(json.dumps(info, indent=2) + '\\n')\nprint('Final AAB AD_ID\
+        \ verification and exact source provenance recorded.')\nPY\n"
+    - name: Stage only the internal AAB and checksum
+      run: "set -euo pipefail\noutput=\"SOUL_READER_8.5.6_INTERNAL_${SOUL_ADS_ARTIFACT_LABEL}_${SOUL_INTERNAL_VERSION_CODE}.aab\"\
+        \ncp build/app/outputs/bundle/release/app-release.aab \"$output\"\nsha256sum \"$output\" > \"\
+        ${output}.sha256\"\nprintf 'Internal AAB version %s; AdsMode=%s. Original owner upload certificate\
+        \ and 70 original audio files verified.\\n' \"$SOUL_INTERNAL_VERSION_CODE\" \"$ADS_MODE\" >> \"\
+        $GITHUB_STEP_SUMMARY\"\nif [ \"$ADS_MODE\" = test ]; then\n  echo 'IsTest=true. Google test ads\
+        \ only; this artifact does not monetize. Device consent, free-reading ad timing and billing still\
+        \ require verification.' >> \"$GITHUB_STEP_SUMMARY\"\nelif [ \"$ADS_MODE\" = off ]; then\n  echo\
+        \ 'Ads are off; this artifact does not monetize.' >> \"$GITHUB_STEP_SUMMARY\"\nelse\n  echo 'Live\
+        \ owner IDs configured. Ad serving, consent and monetization require owner AdMob approval and\
+        \ device verification.' >> \"$GITHUB_STEP_SUMMARY\"\nfi\n"
+    - name: Publish internal AAB artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: SOUL_READER_8.5.6_INTERNAL_${{ env.SOUL_ADS_ARTIFACT_LABEL }}_${{ env.SOUL_INTERNAL_VERSION_CODE
+          }}_AAB
+        path: 'SOUL_READER_8.5.6_INTERNAL_${{ env.SOUL_ADS_ARTIFACT_LABEL }}_*.aab
+
+          SOUL_READER_8.5.6_INTERNAL_${{ env.SOUL_ADS_ARTIFACT_LABEL }}_*.aab.sha256
+
+          SOUL_READER_8.5.6_INTERNAL_${{ env.SOUL_ADS_ARTIFACT_LABEL }}_BUILD_INFO.json
+
+          '
+        if-no-files-found: error
+        retention-days: 30
+    - name: Remove private signing material
+      if: always()
+      run: ': "${RUNNER_TEMP:?}"
+
+        rm -rf -- "$RUNNER_TEMP/soul-owner-upload-signing"
+
+        rm -f "$RUNNER_TEMP/soul-play-upload.jks" android/key.properties
+
+        '
